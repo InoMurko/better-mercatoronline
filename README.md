@@ -4,7 +4,7 @@ A personal grocery agent for [Mercator Online](https://mercatoronline.si) (Slove
 from your past orders, builds the basket you probably need, and lets you edit and order it from the terminal or Telegram.
 It has **no browser**: it talks to the shop's own web endpoints (documented in [`docs/mercator-api.md`](docs/mercator-api.md))
 over plain HTTP. No Chrome, no Stagehand, no AI needed to
-read pages. Claude is only used, optionally, to double-check product replacements.
+read pages. Claude is only used, optionally, to double-check product replacements (see [Where AI is used](#where-ai-is-used-and-where-it-isnt)).
 
 > **Unofficial.** Not affiliated with or endorsed by Mercator. It uses undocumented endpoints that can change at any time.
 > Use it only with your own account, at human pace, and check Mercator's terms of business (Pogoji poslovanja).
@@ -18,6 +18,26 @@ npm run cli -- login      # checks the login, saves the session (.session.json, 
 npm run cli -- due
 npm run bot
 ```
+
+## Where AI is used (and where it isn't)
+Almost nowhere – and it's optional.
+
+**Not AI, plain code:** logging in, searching, prices and discounts, the cart, importing orders, learning your habits
+(how often / how much you buy, what's running low), building the basket, matching "your" product, checkout and the
+Telegram bot. These read the shop's own data, so they're exact, repeatable and free.
+
+**AI, optionally – one job:** when a product you usually buy **isn't sold any more**, the code ranks possible
+replacements (same type and variant, fat %, ply, brand tier, pack size, price per unit – see `src/app/similarity.ts`).
+If `ANTHROPIC_API_KEY` is set, Claude then looks at the top candidates and confirms the best one, or says none fits.
+Rules catch most cases, but some differences are about meaning rather than numbers (skyr vs Greek yoghurt, a kids'
+version, a different flavour), and that's where a language model is better than a score.
+
+- Called from `src/app/choose.ts` only: when building a basket (`/shop`, `cli shop`) or picking a product
+  (`cli pick`, a product name in Telegram) – and only for discontinued products. Usually a handful of calls per basket.
+- Sent: product names, prices, unit prices, brands, categories. Never your account, address, password or order history.
+- Model: `ANTHROPIC_MODEL` (default `claude-haiku-5-5` – small and cheap); the answer comes back as a structured tool call.
+- **Without the key** everything works the same; the top-ranked candidate is used without the double-check.
+  `--no-llm` turns it off for a single CLI run.
 
 ## Commands (`npm run cli -- <command>`)
 | Command | What it does |
