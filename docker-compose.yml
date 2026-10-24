@@ -4,11 +4,15 @@ services:
   agent:
     build: .
     image: merc-agent
+    pull_policy: build                # always build locally – there's no published image to pull
     container_name: merc-agent
     restart: unless-stopped
     env_file: .env
+    # run as your own user so the files in ./data stay yours (Linux); set MERC_UID/MERC_GID in .env – see README
+    user: "${MERC_UID:-1000}:${MERC_GID:-1000}"
     environment:
       TZ: ${TZ:-Europe/Ljubljana}     # the daily check runs at DAILY_CHECK_AT in this time zone
+      HOME: /tmp                      # any user id can write there (npm/tsx caches)
     volumes:
       - ./data:/data                  # orders/, history.json, .session.json, .basket.json
     command: ["bot"]
