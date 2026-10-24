@@ -1,0 +1,57 @@
+# date: 2026-01-15
+# order: 1000001
+# paid: 19.85
+
+Naročeni izdelki
+
+Izdelek
+
+Kol
+
+Cena / kos
+
+Skupaj
+
+Trajno mleko, 3,5 % m.m., Mercator, 1 l
+
+3
+
+0,99 EUR
+
+2,97 EUR
+
+Naravna mineralna voda, Donat, 100% reciklirana plastenka, 0,5 l
+
+6
+
+1,49 EUR
+
+8,94 EUR
+
+Toaletni papir, Violeta, 3-slojni, 16/1
+
+1
+
+8,69 EUR
+
+8,69 EUR
+
+Pivo Bevog Tak pale ale, 5,5 % alkohola, 0,33 l
+
+1
+
+2,49 EUR
+
+2,49 EUR
+
+Rumene breskve, cena za kg
+
+0,78
+
+2,59 EUR
+
+2,02 EUR
+
+Vrednost izdelkov:
+
+25,11 EUR

@@ -1,0 +1,20 @@
+# never copy secrets or personal data into the image
+.env
+.env.*
+!.env.example
+.session.json
+orders/
+history.json
+.basket.json
+families.json
+.agent-state.json
+debug/
+data/
+
+# not needed in the image
+node_modules/
+test/
+docs/
+*.log
+.git/
+.DS_Store

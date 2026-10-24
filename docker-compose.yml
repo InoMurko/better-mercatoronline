@@ -1,0 +1,14 @@
+# docker compose up -d          → the bot, restarted automatically
+# docker compose run --rm agent cli due
+services:
+  agent:
+    build: .
+    image: merc-agent
+    container_name: merc-agent
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Ljubljana}     # the daily check runs at DAILY_CHECK_AT in this time zone
+    volumes:
+      - ./data:/data                  # orders/, history.json, .session.json, .basket.json
+    command: ["bot"]

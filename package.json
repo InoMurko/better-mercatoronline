@@ -1,0 +1,30 @@
+{
+  "name": "merc-api-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mercator Online shopping agent that talks to the shop's web API directly – no browser",
+  "license": "MIT",
+  "scripts": {
+    "cli": "tsx src/cli.ts",
+    "bot": "tsx src/bot.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.2.0",
+    "dotenv": "^18.0.9",
+    "grammy": "^1.46.0",
+    "linkedom": "^0.18.14",
+    "tough-cookie": "^6.0.2",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

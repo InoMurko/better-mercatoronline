@@ -1,0 +1,35 @@
+# dependencies / build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# secrets – credentials, API keys, Telegram token
+.env
+.env.*
+!.env.example
+
+# personal data the agent creates – never commit
+# shop login cookies
+.session.json
+# your order history and products
+orders/
+history.json
+# your basket, product groupings, state
+.basket.json
+families.json
+.agent-state.json
+# saved shop pages (contain name, address, phone)
+debug/
+test/fixtures/private/
+
+# logs / OS / editors
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# docker volume with your data
+data/
