@@ -18,14 +18,15 @@ COPY src ./src
 COPY docker/entrypoint.sh /usr/local/bin/merc
 # files keep their host permissions when copied (often 600 = owner-only); the app runs as the "node" user,
 # so make the code readable and the entrypoint executable for everyone (still owned by root – read-only for node)
-RUN chmod 755 /usr/local/bin/merc \
+RUN command -v setpriv >/dev/null \
+ && chmod 755 /usr/local/bin/merc \
  && chmod -R a+rX /app \
  && mkdir -p /data && chown node:node /data
 
-# your data (orders/, history.json, .session.json, .basket.json…) lives in /data – mount a volume there
+# your data (orders/, history.json, .session.json, .basket.json…) lives in /data – mount a volume there.
+# The entrypoint starts as root only to see who owns /data, then drops to that user (setpriv) before anything runs.
 WORKDIR /data
 VOLUME /data
-USER node
 
 ENTRYPOINT ["merc"]
 CMD ["bot"]

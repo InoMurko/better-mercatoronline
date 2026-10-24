@@ -40,8 +40,7 @@ Runs the Telegram bot around the clock, without Node on your machine. Your data 
 
 ```bash
 cp .env.example .env            # fill in MERCATOR_EMAIL, MERCATOR_PASSWORD, TELEGRAM_BOT_TOKEN …
-mkdir -p data
-echo "MERC_UID=$(id -u)" >> .env && echo "MERC_GID=$(id -g)" >> .env   # Linux: run as you
+mkdir -p data                   # create it yourself, so it's yours (the container runs as its owner)
 docker compose build --pull
 
 # first time: log in and import your orders (stored in ./data)
@@ -76,10 +75,10 @@ Notes
   `--build-arg NODE_VERSION=24.22.1` for Node 24 LTS.
 - `.env` is passed in at run time and never copied into the image (`.dockerignore` keeps secrets and personal data out).
 - The daily check runs at `DAILY_CHECK_AT` in the container's time zone: `TZ` (default `Europe/Ljubljana`).
-- **Linux:** the container runs as `MERC_UID:MERC_GID` (default 1000:1000). Set them to your own ids so it can write
-  `./data` and the files stay yours: `echo "MERC_UID=$(id -u)" >> .env && echo "MERC_GID=$(id -g)" >> .env`.
-  If `./data` was created by Docker (owned by root) or copied with another owner: `sudo chown -R $(id -u):$(id -g) data`.
-  The container tells you at start if `/data` isn't writable.
+- **File ownership:** the container starts as root only to see who owns `./data`, then runs everything as that user
+  (via `setpriv`), so files stay yours on Linux too. If Docker created `./data` (owned by root), it's handed to uid 1000.
+  Force a user with `MERC_UID`/`MERC_GID` in `.env`. Files inside `./data` owned by someone else (e.g. copied with
+  `sudo`) are reported at start with the fix: `sudo chown -R $(id -u):$(id -g) data`.
 
 ## Concurrency
 - All requests go through one client with a cap on parallel requests (`MERCATOR_CONCURRENCY`, default 4 – be polite).
