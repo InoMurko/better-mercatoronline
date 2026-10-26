@@ -53,33 +53,64 @@ the previous runs' ledgers and starts with whatever they left open.
 - **`safe-fetch`:** header values in error messages are reduced to printable ASCII and capped at 60 characters.
 - **Tests:** a regression test for each fix. 67 tests pass.
 
+### Hardening applied after the audit – commits `db4ae65`, `c22d8bd`, `5th commit below`
+
+These were the audit's hardening notes. None of them is a confirmed vulnerability. Each change has a test (80 pass).
+Code was also changed for all 5 deferred areas, but those areas have still **not been audited**: the next run should
+verify these changes rather than assume them.
+
+- **Telegram bot:**
+  - The owner check now requires your *private* chat **and** you as the sender; a group id never works.
+  - `/start` setup works only in private chats.
+  - Ignored chats are logged at most once an hour each, and container logs rotate (10 MB × 3). *(deferred #4, #5)*
+  - Every basket change gets a new basket id, so buttons on an older basket message can't change the wrong line.
+  - Pending buttons expire at lookup (24 h). The "to basket" and "straight to cart" pair cancel each other.
+  - Basket lines are capped at 50, and cart quantities must be more than 0 and at most 99.
+  - The recipe view fits within Telegram's message limit, and send errors are reported.
+  - The daily check re-arms before it runs.
+- **Checkout:** `confirmOrder` also compares the product lines, the product value and the delivery fee. It requires a
+  delivery time and a pay-on-delivery payment of the configured kind (cash or card).
+- **Shop client:**
+  - Only Mercator hosts (`MERCATOR_EXTRA_HOSTS` adds more), no https→http redirects, and an exact login host check.
+  - 30 s per hop and a 10 MB body cap.
+  - The limiter never exceeds its maximum, and cart-lock waiters give up after 15 min.
+  - Bounded listing cache *(deferred #1)*.
+  - Data files are set to 600 and `orders/` to 700, and existing files are fixed on start *(deferred #3)*.
+- **Recipes:**
+  - `safe-fetch` closes refused sockets and aborts everything when it finishes.
+  - Bidi isolate characters are stripped.
+  - Lines for the same product merge, still capped at 6 packs.
+  - `RECIPES_PER_DAY` is validated and kept across restarts.
+  - CLI `--yes` no longer confirms `recipe --add`.
+- **Replacement choice (AI):** catalogue data is fenced, one line per product, and the answer is checked with zod.
+- **Logs:**
+  - All console output is stripped of control characters.
+  - The bot token, shop password and API key are redacted everywhere, including nested error causes *(deferred #2)*.
+- **Docker:**
+  - `MERC_UID`/`MERC_GID` must be numbers and never 0, and the app never runs with group 0.
+  - A root-owned `/data` is only taken over while it is empty.
+  - `cap_drop: ALL` + `CHOWN`/`SETUID`/`SETGID`, tested: the app ends with no capabilities.
+  - A literal `FROM`, and the Node security floor for 22, 24 and 26.
+- **CI:**
+  - Actions pinned to commit SHAs.
+  - Runs on every branch.
+  - Fails if a personal data file is committed.
+- **Commit check:** the pre-commit hook uses `-z`, so non-ASCII personal file names are caught.
+
 ### Still open
 
-**Deferred units** (not reviewed; next run starts here):
-1. In-memory state that grows over the bot's uptime: the product-listing cache, pending buttons, `LIST_PATHS`.
-2. Secrets and personal data in runtime logs, including whether a network error could log the Telegram bot token.
-3. Permissions of data files created before the `umask 077` change.
-4. Sender identity inside the owner chat: the gate checks the chat, not the sender, which matters if
-   `TELEGRAM_CHAT_ID` is a group.
-5. Work and logging triggered by non-owner chats before the gate; container log rotation.
-
-**Hardening notes** (not vulnerabilities; full list in the run report):
-- **Telegram bot:**
-  - Require a private chat or check `ctx.from.id` in the owner gate.
-  - Revise the basket id on every change, so stale basket buttons can't change the wrong line.
-  - Check the 24 h expiry of pending buttons when a button is tapped, not only when pruning.
-  - `confirmOrder`: also compare the item lines, and require a non-empty delivery time and payment.
-- **Shop client:**
-  - Add a timeout and a body cap to `Http.follow`, and a deadline to `cartLock`.
-  - Pin the login and redirect hosts to the shop and to https.
-  - Use an exact host match for the login success check.
-- **Model output:**
-  - Validate the replacement-choice answer with zod.
-  - Fence the shop data in its prompt.
-- **Logs:** strip control characters from shop and model strings before logging.
-- **CI and Docker:**
-  - Pin Actions to commit SHAs and the base image to a digest.
-  - Validate `MERC_UID`/`MERC_GID` as numbers.
+- **Deferred units 1–5:** code changed (see above) but not yet audited. The next run starts here.
+- **Base image digest:** not pinned, because Docker Hub couldn't be reached from the audit environment. To pin it,
+  run `docker buildx imagetools inspect node:22.23.4-slim` and append `@sha256:…` to the `FROM` line.
+- **NAT64 prefixes:** network-specific prefixes are not recognised by the recipe SSRF guard. This only matters on an
+  IPv6-only/DNS64 network; the default Docker network has no IPv6.
+- **Parsing time:** recipe parsing has no wall-clock limit of its own. It is bounded by the 2 MB page, the 5,000-level
+  nesting limit and the text caps.
+- **Kept on purpose:**
+  - HTML entities are still decoded with one small linkedom parse per line. It's bounded, and it keeps named
+    entities working.
+  - The `MERCATOR_MULTI_ADD` fallback can re-add after an ambiguous partial success. It's opt-in and still marked
+    unverified.
 
 ### Previous leads
 
