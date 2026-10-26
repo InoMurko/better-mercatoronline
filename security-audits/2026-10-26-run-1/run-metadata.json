@@ -1,0 +1,28 @@
+{
+  "run_id": "run-1",
+  "repo": "InoMurko/better-mercatoronline (api-agent)",
+  "target": "<snapshot>",
+  "source_ref": { "commit": "64d262c", "commit_message": "snapshot 600ca86", "worktree_dirty": false },
+  "profile": "standard",
+  "scope_paths": ["."],
+  "budget": { "max_agent_invocations": 24, "agents_spent": 0, "pre_recon_gate": "passed (24 >= 4 recon + 2 critics + 1 verifier minimum)" },
+  "execution_policy": "sandboxed-source-and-local-only",
+  "execution_notes": "The audit container is not an OS-enforced sandbox meeting the skill's controls (it has outbound network via a proxy). No target code was executed; no dependencies installed; no external hosts contacted.",
+  "selected_companion_files": [
+    "AI-AND-LLM.md",
+    "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md",
+    "CLOUD-AND-DEPLOYMENT.md",
+    "SUPPLY-CHAIN-AND-RELEASE.md"
+  ],
+  "prior_run_paths": [],
+  "shared_file_owner": "parent",
+  "run_status": "incomplete",
+  "incomplete_reason": "delegation_tool_unavailable: the parent session had no Task/Agent tool, so no reconnaissance agents, isolated hunters, coverage critics, candidate verifiers or Phase 5 record verifiers could be launched. The parent performed reconnaissance and a source review inline; the one resulting candidate is unvalidated and kept only in the ledger (validation incomplete).",
+  "unvalidated_candidates": [
+    {
+      "fingerprint": "recipe-cleanline-script-strip-regex-quadratic",
+      "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fapp%2Frecipe.ts%23extractRecipe::src%2Fapp::RESOURCE-EXHAUSTION-AND-AVAILABILITY.md%23Superlinear%20parsing%2C%20matching%2C%20or%20evaluation"
+    }
+  ],
+  "critics_not_run": ["post-wave coverage critic (wave 1)", "final-clean coverage critic"]
+}

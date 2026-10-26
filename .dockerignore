@@ -18,3 +18,6 @@ docs/
 *.log
 .git/
 .DS_Store
+# audit trail – not needed in the image
+security-audits/
+CLOUDFLARE-SECURITY-AUDIT-REPORT.md

@@ -1,0 +1,1104 @@
+[
+  {
+    "coverage_id": ".github%2Fworkflows%2Fci.yml%23ci::package-lock.json%23locked%20dependency%20graph::.github::SUPPLY-CHAIN-AND-RELEASE.md%23Mutable%20and%20unbound%20build%20inputs",
+    "canonical_refs": {
+      "surface": ".github/workflows/ci.yml#ci",
+      "boundary": "package-lock.json#locked dependency graph",
+      "subsystem": ".github",
+      "attack_class": "SUPPLY-CHAIN-AND-RELEASE.md#Mutable and unbound build inputs"
+    },
+    "surface": "CI and Docker build inputs",
+    "boundary": "npm ci from lockfile, read-only token, no persisted credentials",
+    "subsystem": "CI and build",
+    "attack_class": "Mutable build inputs / privileged workflow",
+    "starting_paths": [
+      ".github/workflows/ci.yml",
+      ".github/dependabot.yml",
+      "package.json",
+      "package-lock.json",
+      "Dockerfile"
+    ],
+    "ordinary_attack_class_block": null,
+    "selected_companion_blocks": [
+      "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+      "SUPPLY-CHAIN-AND-RELEASE.md#Mutable and unbound build inputs",
+      "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+      "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+      "SUPPLY-CHAIN-AND-RELEASE.md#Untrusted code in a privileged workflow"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      ".github/workflows/ci.yml",
+      ".github/dependabot.yml",
+      "package.json",
+      "package-lock.json",
+      "Dockerfile"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          ".github/workflows/ci.yml",
+          ".github/dependabot.yml",
+          "package.json",
+          "package-lock.json",
+          "Dockerfile"
+        ],
+        "invariant": "Untrusted PR code must not run with write tokens or secrets, and builds must install from a locked graph.",
+        "method": "source",
+        "result": "Held in source: workflow permissions are contents: read, triggers are push/pull_request (not pull_request_target), checkout uses persist-credentials: false, installs use npm ci from package-lock.json in CI and the image. Actions and the base image are pinned by tag rather than digest; recorded as hardening with no demonstrated boundary crossing.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": ".gitignore::.githooks%2Fpre-commit%23personal-data%20and%20secret%20gate::repository::ATTACK-CLASSES.md%23Obvious%20things",
+    "canonical_refs": {
+      "surface": ".gitignore",
+      "boundary": ".githooks/pre-commit#personal-data and secret gate",
+      "subsystem": "repository",
+      "attack_class": "ATTACK-CLASSES.md#Obvious things"
+    },
+    "surface": "Repository contents pushed to the public GitHub repo",
+    "boundary": ".gitignore + pre-commit + CI gitleaks",
+    "subsystem": "repository",
+    "attack_class": "Obvious exposures (secrets, personal data)",
+    "starting_paths": [
+      ".gitignore",
+      ".githooks/pre-commit",
+      ".github/workflows/ci.yml",
+      ".env.example",
+      "test/fixtures"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Obvious things",
+    "selected_companion_blocks": [],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      ".gitignore",
+      ".githooks/pre-commit",
+      ".github/workflows/ci.yml",
+      ".env.example",
+      "test/fixtures",
+      "docs/mercator-api.md",
+      "README.md"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          ".gitignore",
+          ".githooks/pre-commit",
+          ".github/workflows/ci.yml",
+          ".env.example",
+          "test/fixtures",
+          "docs/mercator-api.md",
+          "README.md"
+        ],
+        "invariant": "Secrets (.env, .session.json) and personal data (orders/, history.json, basket) must not be committed or baked into the image; no hardcoded credentials, eval or dynamic exec.",
+        "method": "source",
+        "result": "Held in source for this snapshot: all secret/personal files are ignored (.gitignore) and blocked by the pre-commit hook (pre-commit:7-11) with a gitleaks or regex fallback scan; CI runs gitleaks over full history; .env.example holds placeholders only; fixtures reviewed are synthetic; grep found no eval/Function/child_process in src/. Git history before the snapshot commit is not present in this read-only snapshot.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "docker%2Fentrypoint.sh%23merc::docker%2Fentrypoint.sh%23setpriv%20privilege%20drop::docker::CLOUD-AND-DEPLOYMENT.md%23Host%20or%20control-plane%20capability%20exposure",
+    "canonical_refs": {
+      "surface": "docker/entrypoint.sh#merc",
+      "boundary": "docker/entrypoint.sh#setpriv privilege drop",
+      "subsystem": "docker",
+      "attack_class": "CLOUD-AND-DEPLOYMENT.md#Host or control-plane capability exposure"
+    },
+    "surface": "Container start (root) with host bind mount ./data:/data",
+    "boundary": "Drop to owner of /data via setpriv before running app code",
+    "subsystem": "container image",
+    "attack_class": "Container root vs host files",
+    "starting_paths": [
+      "Dockerfile",
+      "docker/entrypoint.sh",
+      "docker-compose.yml",
+      ".dockerignore"
+    ],
+    "ordinary_attack_class_block": null,
+    "selected_companion_blocks": [
+      "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+      "CLOUD-AND-DEPLOYMENT.md#Host or control-plane capability exposure",
+      "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+      "CLOUD-AND-DEPLOYMENT.md#Validation rules"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "Dockerfile",
+      "docker/entrypoint.sh",
+      "docker-compose.yml",
+      ".dockerignore"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "Dockerfile",
+          "docker/entrypoint.sh",
+          "docker-compose.yml",
+          ".dockerignore"
+        ],
+        "invariant": "No app code, including code reading attacker-influenced recipe pages, runs as container root, and root-time actions on the host mount are limited to a non-recursive chown of a root-owned /data.",
+        "method": "source",
+        "result": "Held in source: as root the script only stats /data, optionally chowns /data itself (non-recursive) when root-owned, and immediately execs setpriv --reuid/--regid --clear-groups (entrypoint.sh:12-21); uid 0 (including MERC_UID=0) is mapped to 1000 (15-17); /app is root-owned and only a+rX (Dockerfile:21-24); .dockerignore keeps .env, session, orders and data out of the image. No privileged mounts or capabilities in docker-compose.yml. no-new-privileges is not set (hardening only).",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fapp%2Frecipe-ai.ts%23parseIngredients::src%2Fapp::AI-AND-LLM.md%23Indirect%20injection%20through%20retrieved%20or%20ingested%20content",
+    "canonical_refs": {
+      "surface": "src/app/recipe-match.ts#recipeFromUrl",
+      "boundary": "src/app/recipe-ai.ts#parseIngredients",
+      "subsystem": "src/app",
+      "attack_class": "AI-AND-LLM.md#Indirect injection through retrieved or ingested content"
+    },
+    "surface": "Recipe page text handed to the model",
+    "boundary": "Forced single tool + strict zod schema + fenced untrusted block",
+    "subsystem": "app recipe pipeline",
+    "attack_class": "Indirect prompt injection",
+    "starting_paths": [
+      "src/app/recipe-ai.ts",
+      "src/app/recipe.ts",
+      "src/app/recipe-match.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "selected_companion_blocks": [
+      "AI-AND-LLM.md#Core discipline",
+      "AI-AND-LLM.md#Indirect injection through retrieved or ingested content",
+      "AI-AND-LLM.md#Universal moves",
+      "AI-AND-LLM.md#Validation rules",
+      "AI-AND-LLM.md#Tool-argument injection into a downstream sink",
+      "AI-AND-LLM.md#Sensitive context extraction"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/app/recipe-ai.ts",
+      "src/app/recipe.ts",
+      "src/app/recipe-match.ts",
+      "src/shop/products.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/app/recipe-ai.ts",
+          "src/app/recipe.ts",
+          "src/app/recipe-match.ts",
+          "src/shop/products.ts"
+        ],
+        "invariant": "Untrusted page text reaching the model must not gain any capability beyond producing a bounded ingredient list, and must not be able to extract secrets or account data.",
+        "method": "source",
+        "result": "Held in source: the model gets only numbered, fenced page lines (recipe-ai.ts:310, 322, 359) and no history, cart or secrets; tool_choice forces report_ingredients (358); output is re-validated by a strict zod schema with in-range line numbers, a search-term alphabet without markup/URL characters, bounded amounts and a fixed unit enum (212-230, 363-364). The search term only becomes a URLSearchParams value for the shop search (products.ts:48-51). The second model call (recipe-match.ts:100-150) sees only schema-validated search terms and shop product data and its answer is restricted to ids from that ingredient's own shortlist (147). Worst case is a wrong list of real shop products, which is the designed, user-reviewed outcome.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fapp%2Frecipe-view.ts%23renderRecipe::src%2Fapp::AI-AND-LLM.md%23Insecure%20output%20rendering",
+    "canonical_refs": {
+      "surface": "src/app/recipe-match.ts#recipeFromUrl",
+      "boundary": "src/app/recipe-view.ts#renderRecipe",
+      "subsystem": "src/app",
+      "attack_class": "AI-AND-LLM.md#Insecure output rendering"
+    },
+    "surface": "Page title/lines/suspicious snippets shown in Telegram",
+    "boundary": "HTML escaping of every untrusted string (parse_mode HTML)",
+    "subsystem": "app recipe pipeline",
+    "attack_class": "Insecure output rendering / HTML injection",
+    "starting_paths": [
+      "src/app/recipe-view.ts",
+      "src/app/basket-view.ts",
+      "src/bot.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+    "selected_companion_blocks": [
+      "AI-AND-LLM.md#Core discipline",
+      "AI-AND-LLM.md#Insecure output rendering",
+      "AI-AND-LLM.md#Universal moves",
+      "AI-AND-LLM.md#Validation rules"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/app/recipe-view.ts",
+      "src/app/basket-view.ts",
+      "src/bot.ts",
+      "src/app/recipe-match.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/app/recipe-view.ts",
+          "src/app/basket-view.ts",
+          "src/bot.ts",
+          "src/app/recipe-match.ts"
+        ],
+        "invariant": "Untrusted page text and model output rendered with Telegram parse_mode HTML must be escaped so it cannot inject markup or links.",
+        "method": "source",
+        "result": "Held in source: esc() escapes & < > (basket-view.ts:7) and is applied to title, suspicious snippet, original line, search term, why, flag and product name (recipe-view.ts:277-288); recipe-derived note/why stored in the basket are escaped again when the basket renders (basket-view.ts:24-27); link previews are disabled (bot.ts:375, 442). Button labels are plain text. Untrusted text only appears in text nodes, so not escaping quotes is not exploitable.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fapp%2Frecipe.ts%23cleanLine%20control-character%20strip::src%2Fapp::ATTACK-CLASSES.md%23Injection",
+    "canonical_refs": {
+      "surface": "src/app/recipe-match.ts#recipeFromUrl",
+      "boundary": "src/app/recipe.ts#cleanLine control-character strip",
+      "subsystem": "src/app",
+      "attack_class": "ATTACK-CLASSES.md#Injection"
+    },
+    "surface": "Recipe title/lines written to console logs and the CLI terminal",
+    "boundary": "Control/bidi character removal and JSON.stringify in logs",
+    "subsystem": "app recipe pipeline",
+    "attack_class": "Log/terminal injection",
+    "starting_paths": [
+      "src/app/recipe.ts",
+      "src/app/recipe-match.ts",
+      "src/cli.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+    "selected_companion_blocks": [],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/app/recipe.ts",
+      "src/app/recipe-match.ts",
+      "src/cli.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/app/recipe.ts",
+          "src/app/recipe-match.ts",
+          "src/cli.ts"
+        ],
+        "invariant": "Page-controlled strings printed to logs or the operator's terminal must not carry ANSI escapes, newlines or bidi controls that forge log lines.",
+        "method": "source",
+        "result": "Held in source: cleanLine strips C0/C1 controls (incl. ESC) and bidi/zero-width characters and collapses whitespace (recipe.ts:38-43) for titles and lines; logs JSON.stringify lines and suspicious snippets (recipe-match.ts:244, 247; cli.ts:124, 127).",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fapp%2Frecipe.ts%23extractRecipe::src%2Fapp::RESOURCE-EXHAUSTION-AND-AVAILABILITY.md%23Superlinear%20parsing%2C%20matching%2C%20or%20evaluation",
+    "canonical_refs": {
+      "surface": "src/app/recipe-match.ts#recipeFromUrl",
+      "boundary": "src/app/recipe.ts#extractRecipe",
+      "subsystem": "src/app",
+      "attack_class": "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Superlinear parsing, matching, or evaluation"
+    },
+    "surface": "Recipe URL supplied via bot/CLI",
+    "boundary": "HTML/JSON-LD extraction caps (500 KB per JSON-LD block, 60 lines, 200 chars)",
+    "subsystem": "app recipe pipeline",
+    "attack_class": "Superlinear parsing",
+    "starting_paths": [
+      "src/app/recipe.ts",
+      "src/app/recipe-match.ts",
+      "src/bot.ts"
+    ],
+    "ordinary_attack_class_block": null,
+    "selected_companion_blocks": [
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline",
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Superlinear parsing, matching, or evaluation",
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Universal moves",
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Validation rules"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "candidate",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/app/recipe.ts",
+      "src/app/recipe-match.ts",
+      "src/bot.ts",
+      "src/core/safe-fetch.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/app/recipe.ts",
+          "src/app/recipe-match.ts",
+          "src/bot.ts",
+          "src/core/safe-fetch.ts"
+        ],
+        "invariant": "Work done on a fetched page after the 10 s fetch timeout must be bounded roughly linearly in the 2 MB page, because it runs on the single bot event loop.",
+        "method": "source",
+        "result": "Candidate: cleanLine (recipe.ts:30-45) runs /<(script|style)[\\s\\S]*?<\\/\\1>/gi over the FULL uncapped JSON-LD string before the 200-char cap (line 44). For a string made of repeated '<style' with no closing tag, every start position scans to the end of the string (quadratic). structured() maps cleanLine over every recipeIngredient entry before slice(0, MAX_LINES) (130) and accepts JSON-LD blocks up to 500,000 chars (114); if all lines clean to empty it continues to the next block (131), so up to ~4 such blocks fit in the 2 MB page. No timeout covers this (safe-fetch timer is cleared at 238-239). Runtime magnitude not measured: execution was not permitted.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [
+      "recipe-cleanline-script-strip-regex-quadratic"
+    ],
+    "unresolved": [
+      "Not independently validated (no delegation tool); CPU time for a 500,000-char '<style' JSON-LD string was not measured because target execution was not permitted in this environment."
+    ],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fcore%2Fsafe-fetch.ts%23oneHop%20size%20and%20time%20limits::src%2Fcore::RESOURCE-EXHAUSTION-AND-AVAILABILITY.md%23Decompression%20and%20representation%20amplification",
+    "canonical_refs": {
+      "surface": "src/app/recipe-match.ts#recipeFromUrl",
+      "boundary": "src/core/safe-fetch.ts#oneHop size and time limits",
+      "subsystem": "src/core",
+      "attack_class": "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Decompression and representation amplification"
+    },
+    "surface": "Recipe URL supplied via bot/CLI",
+    "boundary": "2 MB decompressed cap and 10 s abort",
+    "subsystem": "core HTTP/fetch",
+    "attack_class": "Decompression amplification",
+    "starting_paths": [
+      "src/core/safe-fetch.ts"
+    ],
+    "ordinary_attack_class_block": null,
+    "selected_companion_blocks": [
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline",
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Decompression and representation amplification",
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Universal moves",
+      "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Validation rules"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/core/safe-fetch.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/core/safe-fetch.ts"
+        ],
+        "invariant": "A hostile page must not make the fetcher buffer more than the configured byte cap or run beyond the timeout, including through gzip/deflate/br.",
+        "method": "source",
+        "result": "Held in source: the cap is enforced on the decompressed stream (safe-fetch.ts:198-209) as well as on Content-Length (186-190); unknown encodings are refused (130-137); the AbortController timer covers connection and body read for every hop (223-224, 229-231). The fetch itself is bounded; post-fetch parsing is a separate unit.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fapp%2Frecipe-match.ts%23recipeFromUrl::src%2Fcore%2Fsafe-fetch.ts%23safeFetchHtml::src%2Fcore::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+    "canonical_refs": {
+      "surface": "src/app/recipe-match.ts#recipeFromUrl",
+      "boundary": "src/core/safe-fetch.ts#safeFetchHtml",
+      "subsystem": "src/core",
+      "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+    },
+    "surface": "Recipe URL supplied via bot/CLI",
+    "boundary": "SSRF guard: public-IP only, pinned lookup, per-hop recheck",
+    "subsystem": "core HTTP/fetch",
+    "attack_class": "SSRF",
+    "starting_paths": [
+      "src/core/safe-fetch.ts",
+      "src/app/recipe-match.ts",
+      "src/bot.ts",
+      "src/cli.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+    "selected_companion_blocks": [
+      "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+      "CLOUD-AND-DEPLOYMENT.md#Metadata and internal-service reachability",
+      "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+      "CLOUD-AND-DEPLOYMENT.md#Validation rules"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/core/safe-fetch.ts",
+      "src/app/recipe-match.ts",
+      "src/bot.ts",
+      "src/cli.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/core/safe-fetch.ts",
+          "src/app/recipe-match.ts",
+          "src/bot.ts",
+          "src/cli.ts"
+        ],
+        "invariant": "A stranger-chosen recipe URL (or any redirect hop) must not reach loopback, LAN, link-local/metadata, CGNAT, ULA or IPv4-mapped/translated addresses, non-80/443 ports, or carry credentials/shop cookies.",
+        "method": "source",
+        "result": "Held in source: checkUrl rejects non-http(s), userinfo, non-80/443 ports and IP literals outside public space (safe-fetch.ts:76-92); guardedLookup rejects if ANY resolved address is non-public and hands the socket exactly the checked address (108-128), so rebinding between check and connect is closed; IPv6 is public only for 2000::/3 minus listed ranges and dotted ::ffff: forms are refused (58-71); redirects are re-checked per hop with max 3 (228-237); agent:false and its own http/https client mean no cookie jar or shop session is sent (157-170). Test-only allowIps/allowPorts/resolve options are never passed by bot.ts:364 or cli.ts:122. No bypass found.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fbot.ts%23Telegram%20updates::src%2Fbot.ts%23owner%20chat%20gate::src::ATTACK-CLASSES.md%23Access%20control",
+    "canonical_refs": {
+      "surface": "src/bot.ts#Telegram updates",
+      "boundary": "src/bot.ts#owner chat gate",
+      "subsystem": "src",
+      "attack_class": "ATTACK-CLASSES.md#Access control"
+    },
+    "surface": "Any Telegram user/chat that can message the bot",
+    "boundary": "bot.use middleware comparing ctx.chat.id to TELEGRAM_CHAT_ID",
+    "subsystem": "bot",
+    "attack_class": "Access control",
+    "starting_paths": [
+      "src/bot.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+    "selected_companion_blocks": [],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/bot.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/bot.ts"
+        ],
+        "invariant": "Only the configured owner chat may trigger shop, cart, recipe, checkout or callback handlers.",
+        "method": "source",
+        "result": "Held in source: the first middleware returns without next() unless ctx.chat.id === OWNER, and does nothing at all while OWNER is unset except replying with the sender's own chat id to /start (bot.ts:88-102). It is registered before every command, message and callback_query handler (104-609); updates without a chat (inline queries, inline-message callbacks) have chatId undefined and are dropped. Callback payload indices are parsed with Number() into in-memory maps keyed by random ids, so no prototype-key lookups result.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fbot.ts%23callback%20co%3A%2A::src%2Fshop%2Fcheckout.ts%23confirmOrder::src%2Fshop::ATTACK-CLASSES.md%23Business%20logic",
+    "canonical_refs": {
+      "surface": "src/bot.ts#callback co:*",
+      "boundary": "src/shop/checkout.ts#confirmOrder",
+      "subsystem": "src/shop",
+      "attack_class": "ATTACK-CLASSES.md#Business logic"
+    },
+    "surface": "Checkout buttons and CLI checkout",
+    "boundary": "Re-read review and compare total/slot/payment before POST; pay-on-delivery only",
+    "subsystem": "shop client",
+    "attack_class": "Business logic",
+    "starting_paths": [
+      "src/shop/checkout.ts",
+      "src/shop/cart.ts",
+      "src/bot.ts",
+      "src/cli.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+    "selected_companion_blocks": [],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/shop/checkout.ts",
+      "src/shop/cart.ts",
+      "src/bot.ts",
+      "src/cli.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/shop/checkout.ts",
+          "src/shop/cart.ts",
+          "src/bot.ts",
+          "src/cli.ts"
+        ],
+        "invariant": "An order is placed only once, only with pay-on-delivery, and only if the review page still matches what the owner approved.",
+        "method": "source",
+        "result": "Held in source: PAYMENT_METHOD is restricted to offlineCard/offlineCash (checkout.ts:288-295) and checked on the page (423); confirmOrder re-reads the review and refuses on total/slot/payment drift (434-441); the pending entry is deleted before placing so a double tap cannot order twice (bot.ts:463-466); cart writes and checkout share cartLock; POSTs are never retried (http.ts:57). Only the owner can drive these flows, so remaining gaps (item composition not compared) are same-principal and recorded as hardening.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fbot.ts%23callback%20rc%3Ago::src%2Fapp%2Frecipe-match.ts%23toCartItems::src%2Fapp::AI-AND-LLM.md%23Action-confirmation%20and%20approval%20binding",
+    "canonical_refs": {
+      "surface": "src/bot.ts#callback rc:go",
+      "boundary": "src/app/recipe-match.ts#toCartItems",
+      "subsystem": "src/app",
+      "attack_class": "AI-AND-LLM.md#Action-confirmation and approval binding"
+    },
+    "surface": "Recipe plan buttons in the owner's Telegram chat",
+    "boundary": "Owner taps: recipe -> basket -> cart -> checkout, each separate",
+    "subsystem": "app recipe pipeline",
+    "attack_class": "Approval binding",
+    "starting_paths": [
+      "src/bot.ts",
+      "src/app/recipe-match.ts",
+      "src/app/recipe-view.ts",
+      "src/app/restock.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+    "selected_companion_blocks": [
+      "AI-AND-LLM.md#Core discipline",
+      "AI-AND-LLM.md#Action-confirmation and approval binding",
+      "AI-AND-LLM.md#Universal moves",
+      "AI-AND-LLM.md#Validation rules",
+      "AI-AND-LLM.md#Excessive agency and confused-deputy authority"
+    ],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/bot.ts",
+      "src/app/recipe-match.ts",
+      "src/app/recipe-view.ts",
+      "src/cli.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/bot.ts",
+          "src/app/recipe-match.ts",
+          "src/app/recipe-view.ts",
+          "src/cli.ts"
+        ],
+        "invariant": "Nothing derived from a recipe page may reach the cart or an order without the owner approving the exact rendered items, and quantities must stay bounded.",
+        "method": "source",
+        "result": "Held in source: recipeFromUrl never touches the cart (recipe-match.ts:229-256); quantities are computed by code and capped at MAX_PACKS=6 with flags (59-73); the plan is rendered with product, quantity and the page's own line (recipe-view.ts:282-289); rc:go adds only to the local basket (bot.ts:428-438); the cart write is a separate bk:go tap (498-514) and ordering a further co:go tap bound to a re-read review (241-245, checkout.ts:434-441). CLI requires --add plus a y/N prompt (cli.ts:131). Callback ids are random per plan and the chat is owner-gated.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fcore%2Fhttp.ts%23Http.follow::src%2Fcore%2Fhttp.ts%23cookie%20jar%20scope%20and%20saveSession::src%2Fcore::ATTACK-CLASSES.md%23Cryptography%20and%20secrets",
+    "canonical_refs": {
+      "surface": "src/core/http.ts#Http.follow",
+      "boundary": "src/core/http.ts#cookie jar scope and saveSession",
+      "subsystem": "src/core",
+      "attack_class": "ATTACK-CLASSES.md#Cryptography and secrets"
+    },
+    "surface": "Shop/login HTTP traffic and redirects",
+    "boundary": "tough-cookie domain/secure scoping, 0600 session file, error text",
+    "subsystem": "core HTTP/fetch",
+    "attack_class": "Secrets and session handling",
+    "starting_paths": [
+      "src/core/http.ts",
+      "src/shop/auth.ts",
+      "src/app/session.ts",
+      "src/core/forms.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "selected_companion_blocks": [],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/core/http.ts",
+      "src/shop/auth.ts",
+      "src/app/session.ts",
+      "src/core/forms.ts",
+      "src/bot.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/core/http.ts",
+          "src/shop/auth.ts",
+          "src/app/session.ts",
+          "src/core/forms.ts",
+          "src/bot.ts"
+        ],
+        "invariant": "Shop credentials and session cookies must only be sent to the shop/login hosts and must not be written to logs or world-readable files.",
+        "method": "source",
+        "result": "Held in source: cookies are attached per URL by tough-cookie's domain/path/secure matching (http.ts:81-85); credentials are only placed in the login form posted to the shop's own form action (auth.ts:191-197) and never logged (login errors print the landing URL without query, 201); the session jar is written with mode 0600 on creation (http.ts:119). The recipe fetcher is a separate client without the jar. Only shop-controlled pages choose redirect/form targets, and the shop is the trusted party here.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  },
+  {
+    "coverage_id": "src%2Fshop%2Forders.ts%23importNewOrders::src%2Fshop%2Forders.ts%23fileTag::src%2Fshop::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+    "canonical_refs": {
+      "surface": "src/shop/orders.ts#importNewOrders",
+      "boundary": "src/shop/orders.ts#fileTag",
+      "subsystem": "src/shop",
+      "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+    },
+    "surface": "Order list/detail pages from the shop",
+    "boundary": "Order number sanitising and ISO date regex for file names",
+    "subsystem": "shop client",
+    "attack_class": "Path handling for saved orders",
+    "starting_paths": [
+      "src/shop/orders.ts",
+      "src/shop/pages.ts",
+      "src/app/history.ts",
+      "src/app/basket.ts"
+    ],
+    "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+    "selected_companion_blocks": [],
+    "excluded_blocks": [
+      {
+        "block": "MEMORY-SAFETY-AND-BINARY.md#Core discipline",
+        "reason": "TypeScript on Node; no native code, FFI or binary parsers in src/"
+      },
+      {
+        "block": "CLIENT-SIDE.md#Core discipline",
+        "reason": "No browser UI, webview or DOM execution; linkedom parses without executing scripts (src/app/recipe.ts:172)"
+      },
+      {
+        "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+        "reason": "Single-user agent; no tenants or shared stores (src/bot.ts:30 single OWNER)"
+      },
+      {
+        "block": "DESKTOP-MOBILE-AND-LOCAL-IPC.md#Core discipline",
+        "reason": "No local IPC, deep links or native app surfaces"
+      },
+      {
+        "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+        "reason": "Target is an HTTP client of the shop, not a server with its own sessions/auth endpoints"
+      },
+      {
+        "block": "PROTOCOLS-RPC-AND-MESSAGING.md#Core discipline",
+        "reason": "Telegram is reached via grammy long polling; no custom protocol/broker/webhook receiver in source"
+      }
+    ],
+    "prior_status": "none",
+    "attempts": [],
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "parent-inline-review",
+    "reviewed_paths": [
+      "src/shop/orders.ts",
+      "src/shop/pages.ts",
+      "src/app/history.ts",
+      "src/app/basket.ts",
+      "src/app/habits.ts"
+    ],
+    "local_checks": [
+      {
+        "agent_id": "parent-inline-review",
+        "reviewed_paths": [
+          "src/shop/orders.ts",
+          "src/shop/pages.ts",
+          "src/app/history.ts",
+          "src/app/basket.ts",
+          "src/app/habits.ts"
+        ],
+        "invariant": "Shop-derived values used in file paths must not escape orders/.",
+        "method": "source",
+        "result": "Held in source: file names are `${date}-${fileTag(orderNo)}.txt` where date comes only from a digits-and-dots regex (pages.ts:11-14) and fileTag strips everything but [\\w-] (orders.ts:54, 74). Other files (history.json, .basket.json, families.json) use fixed names in the working directory.",
+        "artifact": null
+      }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "parent_notes": "Reviewed inline by the parent: no Task/Agent delegation tool was available, so this was not an isolated hunter and no coverage critic re-checked it."
+  }
+]

@@ -171,5 +171,10 @@ made-up fixtures (`test/fixtures/`).
 On GitHub, CI runs the tests, `npm audit` and gitleaks on every push; Dependabot proposes dependency, Docker image and
 Actions updates weekly.
 
+## Security audits
+Audits with [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) are logged in
+[CLOUDFLARE-SECURITY-AUDIT-REPORT.md](CLOUDFLARE-SECURITY-AUDIT-REPORT.md): when each ran, which commit, what it found and
+what was fixed. Each run's machine-readable output is in `security-audits/`, so the next audit can start from it.
+
 ## License
 [MIT](LICENSE) © 2026 Ino Murko

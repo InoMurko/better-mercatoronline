@@ -1,0 +1,39 @@
+{
+ "run_id": "run-2",
+ "repo": "InoMurko/better-mercatoronline (api-agent)",
+ "target": "snapshot of 3f15c34 (committed files only)",
+ "source_ref": "3f15c34 (clean snapshot of committed files only)",
+ "profile": "standard",
+ "scope_paths": [
+  "."
+ ],
+ "budget": 25,
+ "execution_policy": "sandboxed-source-and-local-only",
+ "selected_companions": [
+  "AI-AND-LLM.md",
+  "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md",
+  "CLOUD-AND-DEPLOYMENT.md",
+  "SUPPLY-CHAIN-AND-RELEASE.md"
+ ],
+ "prior_runs": [
+  "run-1 (600ca86)"
+ ],
+ "shared_file_owner": "parent",
+ "target_execution": "none – this container is not an OS-enforced sandbox (outbound network via proxy); source-only review",
+ "run_status": "complete",
+ "resolved_prior_leads": [
+  {
+   "fingerprint": "recipe-cleanline-script-strip-regex-quadratic",
+   "reason": "fixed in f99c4ba; h2-parse source check: input capped to max*4 before the regex (recipe.ts:33), call counts bounded"
+  }
+ ],
+ "budget_note": "User agreed to 'roughly 15–25 agent runs'. Parent set 24, raised to 25 after wave 4 to fund one Phase 5 verifier per final record (disclosed in the report).",
+ "coverage_status": "partial – 5 units deferred (budget); final-clean critic did not return clean",
+ "agents_spent": 25,
+ "ended": "2026-10-26",
+ "candidates_final": {
+  "needs_validation": 3,
+  "confirmed": 0,
+  "rejected": 0
+ }
+}

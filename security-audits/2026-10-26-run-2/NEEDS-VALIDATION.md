@@ -1,0 +1,99 @@
+# NEEDS VALIDATION – run-2 (snapshot 3f15c34)
+
+These records stay `needs_validation` in `findings.json`: the audit platform had no OS-enforced sandbox, so no audit agent ran target code. Each record has a separate **owner-observed result**. Those checks ran on the owner's own machine with synthetic input and are not part of the audit evidence. All three were then fixed in commit 3321540.
+
+## Nested hidden or ingredient elements make extractRecipe do quadratic text work before any cap
+`recipe-extract-nested-element-textcontent-quadratic`
+
+A recipe page author controls the HTML that the owner's bot or CLI parses after the owner submits one link. At recipe.ts:178, extractRecipe takes textContent of every element that matches HIDING_PLACES and keeps every string. It joins them and only then truncates to 200_000 chars. If D elements carrying e.g. the hidden attribute are nested, the element at depth d returns D-d characters. The total output is therefore about D^2/2 characters, and that cost comes from the returned strings themselves, whatever linkedom does inside. The 2_000_000-byte fetch cap (safe-fetch.ts:222) allows D of about 150k ('<div hidden>a' is 13 bytes). That gives about 1.1e10 characters, far beyond Node's default heap. The likely outcome is a fatal heap OOM after a long stall on the single event loop. work()'s try/catch (bot.ts:76-87) cannot catch that, so the bot process dies. Docker 'restart: unless-stopped' brings it back, but the in-memory recipe plans, pending checkout map and daily recipe quota are lost. There is a second, independent variant in visibleText, which runs whenever no JSON-LD Recipe is found (the attacker controls this). D nested elements with class 'ingredient' and no hiding attribute skip the :178 blowup. Then the sort comparator at :151 recomputes textContent of both candidates on every comparison: about D log D comparisons x O(D) chars, which is roughly 1e11+ character operations at D=150k. That is a CPU stall without heap retention. It may freeze the bot for a long time without crashing it, so the restart policy does not recover it. Scope: a single-owner personal bot. The attacker needs the owner to submit the link, and each submission spends one daily-quota slot. The impact is loss of availability of the owner's bot (Telegram commands, the daily import/report job) and loss of in-memory state. No data or cart effect.
+
+**Claimed root cause:** src/app/recipe.ts:178 computes per-element textContent over possibly nested subtrees and applies the 200_000-char cap only after every string has been materialized and joined. src/app/recipe.ts:151 recomputes textContent of possibly nested candidates inside a sort comparator. Nothing bounds element count, nesting depth or accumulated length before the work is done; the only upstream bound is 2 MB of HTML, and there is no time bound or worker isolation for parsing.
+
+**Trace:**
+1. `src/bot.ts:367` (entrypoint, startRecipe): The owner pastes a stranger's recipe link (free text at :388 or /recipe at :381). The bot calls recipeFromUrl inside work(). The CLI 'recipe' command at cli.ts:125 is an equivalent entry.
+2. `src/core/safe-fetch.ts:222` (propagation, safeFetchHtml): Accepts up to 2_000_000 bytes of text/html from the attacker's public host (10 s timeout) and returns it decoded.
+3. `src/app/recipe-match.ts:236` (propagation, recipeFromUrl): Calls extractRecipe(page.html) synchronously on the single event loop. There is no time bound or worker.
+4. `src/app/recipe.ts:177` (propagation, extractRecipe): linkedom parseHTML builds the document. Unclosed <div hidden> (or <div class=ingredient>) tags nest D deep because div does not implicitly close div.
+5. `src/app/recipe.ts:178` (sink, extractRecipe): querySelectorAll(HIDING_PLACES).map(el => textContent) materializes the sum over d of (D-d) characters, about D^2/2. Only then does .join('\n').slice(0, 200_000) apply, so the cap comes after the quadratic allocation.
+
+**Evidence:**
+- `src/app/recipe.ts:178`: textContent of every matching element is computed and kept in an array before join and slice(0, 200_000). Nested matches overlap, so the total output length is quadratic in nesting depth whatever the DOM implementation.
+- `src/app/recipe.ts:151`: The sort comparator calls textContent on both candidates on every comparison. With nested [class*=ingredient i] candidates this is O(D^2 log D) character work. It runs when structured() finds no JSON-LD Recipe (line 179), which the attacker controls.
+- `src/app/recipe.ts:147`: Removal of HIDDEN elements in visibleText happens after line 178 has already run, so it does not protect the :178 sink. The :151 variant avoids it by using non-hidden ingredient-class elements.
+- `src/core/safe-fetch.ts:222`: maxBytes 2_000_000 is the only upstream size bound. Nothing bounds element count or depth.
+- `src/app/recipe-match.ts:233`: The daily quota slot is consumed before the fetch. Each attack costs the owner one submission, but the counter is in memory and resets when the process crashes.
+- `src/bot.ts:83`: work() catches thrown errors only. A V8 heap OOM aborts the process, and a CPU stall is never interrupted.
+- `docker-compose.yml:9`: restart: unless-stopped is the only recovery after a crash. It does nothing for a long synchronous stall. In-memory recipes, pending checkouts and quota are lost on restart.
+
+**Blockers:**
+- No OS-enforced sandbox or promotion helper is available in this run, so linkedom parsing plus extractRecipe cannot be executed to observe the growth curve or the failure mode. Without execution the result cannot be confirmed.
+- linkedom 0.18.14, htmlparser2 and css-select are not vendored (no node_modules) and may not be fetched. Source review alone cannot rule out a deep-nesting failure (for example a catchable RangeError or recursion limit in the parser or in querySelectorAll traversal) that would end the request before the quadratic step. If that happens, the outcome is a caught 'failed' reply rather than an OOM or stall. The quadratic output size at :178 is source-determined only if the parse really nests to depth D.
+- The actual Node heap limit in the deployed container (default derived from host memory; no NODE_OPTIONS or --max-old-space-size is set in the repo) decides whether the 2 MB case is a fatal OOM or only a long stall, and how long the :151 stall lasts.
+
+**Validation plan:**
+- *local:* In an OS-enforced sandbox: no network, target mounted read-only, node_modules installed from package-lock.json with linkedom 0.18.14, 1 GB memory limit (or node --max-old-space-size=512), 30 s CPU limit, writes only to scratch. Run a tsx harness that imports extractRecipe from src/app/recipe.ts. (1) Call it on '<html><body>' + '<div hidden>a'.repeat(D) for D = 1000, 2000, 4000, 8000. After each call, record wall time and process.memoryUsage().heapUsed, and check that document depth equals D. Roughly 4x growth per doubling of D confirms the :178 sink. (2) Repeat with '<html><body>' + '<div class=ingredient>a'.repeat(D) (no JSON-LD) for the :151 comparator, expecting about 4x+ time per doubling. (3) Run D=8000 once with a deliberately deep page to see whether a RangeError from the parser or selector fires first. Do not go to the 2 MB size. Regression test: extractRecipe on 20000 nested hidden divs and on 20000 nested ingredient divs each finish under 200 ms. Fix: collect hidden text with a single document-order walk that skips descendants of an already-collected matching ancestor and stops at 200_000 chars. For the ingredient root, compute each candidate's text length once (or skip candidates nested inside another candidate) before sorting. Optionally cap element count or depth after parsing.
+- *deployment:* The owner checks the effective V8 heap limit in the running container (node -e 'console.log(v8.getHeapStatistics().heap_size_limit)' via docker exec) and the container memory limit, if any. The owner confirms that the restart policy is active (docker inspect merc-agent --format '{{.HostConfig.RestartPolicy.Name}}'). Do not submit an attack page to the live bot.
+
+**Owner-observed result and fix:** Owner-observed on the owner's machine (Node 22.23.4, synthetic input, scratch dir): depth 1000/2000/4000/8000 → 30/76/182/814 ms, heap 22→97 MB (≈4× per doubling). The ingredient-class variant showed 34/77/289 ms for 1000–4000. While validating the fix, a further cause was found: linkedom's parser itself is superlinear in depth (20k/40k/80k nested divs → 0.1/0.4/4.4 s). Fixed in 3321540: early-stop text collection, candidates measured once (max 20), and a linear pre-scan that refuses pages nested >5000 levels (the 2 MB attack page is refused in ~20 ms).
+
+## findSuspicious tool-tag regex backtracks quadratically over up to 200k chars of hidden page text
+`recipe-findsuspicious-tool-tag-regex-quadratic`
+
+The SUSPICIOUS pattern at src/app/recipe.ts:57 is /\b(tool[_ ]?(use|call)|function call|<\/?(tool|system|assistant|untrusted)[^>]*>)/i. Its third alternative has no length bound before the closing '>'. findSuspicious (:63-76) runs text.match with this pattern over the hidden-places text (:181). That text is the joined textContent of every HIDING_PLACES element (:169-172, :178), capped only at 200_000 chars, and the page author controls all of it. Raw '<tool' survives as text inside <script type="application/ld+json"> (a HIDING_PLACES member whose content is raw text), or as &lt;tool entities in a [hidden] element. The leading \b is met when a word character precedes '<' (for example 'a<tool'). If the text has no '>', each of k '<tool' start positions makes [^>]* scan to the end of the string and then backtrack and fail, so the work is O(k x n). 'a<tool' repeated about 33k times (about 200 KB, well under the 2_000_000-byte fetch cap at src/core/safe-fetch.ts:222) gives roughly 3e9 forward [^>] steps (about k x n/2), plus a similar number of failed '>' checks while backtracking. This is synchronous work in extractRecipe on the bot's single Node event loop, so all bot handling (other commands, the daily job) stalls until it finishes. The scan runs before the empty-ingredients check at recipe-match.ts:239, so the page needs no real recipe. Limits on repetition: the owner must submit the link (the chat-id gate), and the in-memory quota RECIPES_PER_DAY (default 30, recipe-match.ts:219-233) caps attempts per day. Recovery is automatic once the scan ends. The expected impact is a temporary stall of a single-owner bot, of the same class as the run-1 cleanLine regex the owner timed at 2.9 s and fixed in f99c4ba. Severity is low.
+
+**Claimed root cause:** src/app/recipe.ts:57 uses an unbounded [^>]* inside an unanchored pattern. :66-67 applies it to attacker-controlled hidden text of up to 200_000 chars (:178), with no per-match length bound and no bound on the number of '<tool' start positions.
+
+**Trace:**
+1. `src/bot.ts:388` (entrypoint, bot.on("message:text")): Owner pastes a stranger's recipe link; the first https?:// match goes to startRecipe (the /recipe command at :381 is equivalent)
+2. `src/bot.ts:367` (propagation, startRecipe): Calls recipeFromUrl with the submitted URL
+3. `src/app/recipe-match.ts:236` (propagation, recipeFromUrl): After the daily quota check and safeFetchHtml (2 MB cap), the fetched HTML goes to extractRecipe
+4. `src/app/recipe.ts:178` (propagation, extractRecipe): textContent of every hiding-place element, including raw JSON-LD script text, is joined and sliced to 200_000 chars
+5. `src/app/recipe.ts:181` (propagation, extractRecipe): findSuspicious(found.lines.join("\n"), hidden) runs before any check that ingredients exist
+6. `src/app/recipe.ts:67` (sink, findSuspicious): text.match(re) with the :57 pattern; for each '<tool' that has no later '>', [^>]* scans to the end of the string and fails
+
+**Evidence:**
+- `src/app/recipe.ts:57`: Alternative <\/?(tool|system|assistant|untrusted)[^>]*> has no length bound before '>'; the leading \b is met by any word char before '<'
+- `src/app/recipe.ts:178`: Hidden text is capped only at 200_000 chars, enough for about 33k 'a<tool' occurrences
+- `src/app/recipe.ts:170`: script[type="application/ld+json"] is a hiding place, so raw '<tool' text survives into hidden without being parsed as a tag
+- `src/core/safe-fetch.ts:222`: maxBytes 2_000_000 lets in the roughly 200 KB payload; no time bound covers parsing after the fetch
+- `src/app/recipe-match.ts:232`: In-memory quota check (RECIPES_PER_DAY, default 30) bounds repeats per day but not the cost of one link
+
+**Blockers:**
+- No OS-enforced sandbox is available in this run, so target code cannot run. The absolute V8 irregexp time for the O(k x n) backtracking cannot be measured from source, and that time decides whether the stall is material (seconds) or negligible.
+
+**Validation plan:**
+- *local:* In a network-disabled sandbox with CPU, memory and wall-clock limits, run a node harness that imports only findSuspicious from src/app/recipe.ts (no I/O, no bot, no fetch). Time findSuspicious('', 'a<tool'.repeat(k)) for k = 2000, 4000, 8000 and stop at k=8000. Roughly 4x growth per doubling confirms quadratic behavior; extrapolate to k = 33000 rather than running it. Optionally also time extractRecipe('<script type="application/ld+json">' + 'a<tool'.repeat(8000) + '</script>') to confirm the payload reaches the sink. Fix: bound the quantifier (<\/?(tool|system|assistant|untrusted)\b[^>]{0,80}>) or match only <\/?(tool|system|assistant|untrusted)\b without the tail. Regression test: the k=33000 input completes in under 50 ms.
+
+**Owner-observed result and fix:** Owner-observed: k=2000/4000/8000 → 11/36/144 ms (≈4× per doubling, about 2.5 s extrapolated to the 200 KB cap). Fixed in 3321540 by dropping the [^>]* tail; 200 KB now takes 1–3 ms.
+
+## Recipe page's Content-Type / Content-Encoding header copied raw into error text printed to the owner's console
+`safe-fetch-response-header-in-error-message-unescaped-to-console`
+
+When the owner submits a recipe link (bot free text or /recipe, or the CLI recipe command), the stranger's server controls the response headers. If the Content-Type does not start with text/html or application/xhtml+xml, oneHop rejects with BlockedUrlError(`not a web page (${type.split(";")[0]})`) (safe-fetch.ts:181-184). If the Content-Type is HTML but the Content-Encoding is unknown, decompressed() throws BlockedUrlError(`unsupported content encoding ${enc}`) (safe-fetch.ts:131-135; only lowercased and trimmed). That error is caught at :194-196 and rejected. In both cases the header value goes into the message with no character filtering and no length cap. The error propagates unchanged through recipeFromUrl (recipe-match.ts:235) to work() in the bot, which calls console.error(`${what} failed:`, err) (bot.ts:83). util.inspect prints err.stack, which contains the message, without escaping. In the CLI the error reaches cli.ts:177 console.error("✗", err.message). Node's HTTP parser rejects C0 controls in header values. Header values are decoded as latin1, so obs-text bytes 0x80-0x9F that the parser accepts would become C1 code points (U+009B CSI, U+009D OSC), which are written to stdout/stderr as UTF-8. A terminal that acts on UTF-8-encoded C1 controls would then let the page author spoof or hide log lines or set the window title in the owner's terminal or log viewer. The Telegram reply at bot.ts:84 is plain text (no parse_mode), so no HTML injection happens there. The impact is limited to the integrity of the owner's log view. No data, credentials or authority cross the boundary.
+
+**Claimed root cause:** safe-fetch.ts builds BlockedUrlError messages from raw response header values (Content-Type at :184, Content-Encoding at :135) with no control-character filtering or length cap. bot.ts work() (:83) and cli.ts (:177) log Error objects or messages without neutralising C0/C1 control characters.
+
+**Trace:**
+1. `src/bot.ts:388` (entrypoint, bot.on(message:text)): The owner (the chat that passes the chat-id gate) pastes a link to an attacker-controlled page. The first https?:// match is passed to startRecipe, which runs recipeFromUrl inside work() (bot.ts:363-369).
+2. `src/app/recipe-match.ts:235` (propagation, recipeFromUrl): safeFetchHtml(url) fetches the stranger's page. Errors propagate unwrapped.
+3. `src/core/safe-fetch.ts:184` (propagation, oneHop): A non-HTML Content-Type is copied verbatim (text before the first ';') into the BlockedUrlError message. The Content-Encoding path at line 135 does the same with a lowercased and trimmed value.
+4. `src/bot.ts:83` (sink, work): console.error prints the Error object. Its stack contains the raw message and goes to the owner's terminal or container log.
+
+**Evidence:**
+- `src/core/safe-fetch.ts:184`: reject(new BlockedUrlError(`not a web page (${type.split(";")[0] || "no content type"})`)), where type = String(res.headers["content-type"]) at :181, with no filtering or cap
+- `src/core/safe-fetch.ts:135`: throw new BlockedUrlError(`unsupported content encoding ${enc}`), where enc is the raw header after only toLowerCase().trim() (:131). Caught and rejected at :194-196.
+- `src/app/recipe-match.ts:235`: const page = await safeFetchHtml(url, opts.fetch); with no try/catch, so the error reaches the caller unchanged
+- `src/bot.ts:83`: console.error(`${what} failed:`, err) prints the Error object (its stack) raw
+- `src/bot.ts:84`: ctx.reply sends err.message as plain text with no parse_mode, so there is no HTML injection on the Telegram side
+- `src/cli.ts:125`: The CLI recipe command calls recipeFromUrl(shop.anon, url, ...), which is the same fetch path
+- `src/cli.ts:177`: console.error("✗", err instanceof Error ? err.message : err) prints the raw message in the CLI path
+
+**Blockers:**
+- Execution is not allowed in this run (no OS-enforced sandbox, no promotion). Two things were therefore not observed: (a) that Node 22.23.4's llhttp in default non-lenient mode accepts bytes 0x80-0x9F in Content-Type/Content-Encoding values and exposes them as latin1 code points, and (b) that util.inspect leaves C1 code points unescaped when it prints an Error's stack via console.error. Both are decisive for whether control bytes reach stdout/stderr.
+- Whether the owner's terminal or log viewer (local terminal for npm run bot / CLI, docker logs, journald) interprets UTF-8-encoded C1 controls is a deployment fact outside the repository. Many terminals ignore them, and xterm-style terminals may act on them.
+
+**Validation plan:**
+- *local:* In an OS-enforced sandbox with no network and scratch-only writes, start a loopback HTTP fixture that answers 200 with the raw header bytes `Content-Type: x\x9b2J\x9d0;pwned\x07` (the \x07 is expected to be rejected by llhttp; also test a variant without it). Add a second fixture with `Content-Type: text/html` and `Content-Encoding: x\x9b2J`. Call safeFetchHtml(url, {allowIps:['127.0.0.1'], allowPorts:[port]}) and capture the rejection. Run console.error('t failed:', err) with stderr redirected to a scratch file, then hexdump it and look for C2 9B / C2 9D sequences. Regression test after the fix: err.message contains no code points in [\x00-\x1f\x7f-\x9f] and is capped at about 100 characters for both header paths.
+- *deployment:* The owner runs printf '\xc2\x9b2J' (and printf '\xc2\x9d0;test\xc2\x9c' for a title change) in the terminal or log viewer used for `npm run bot`, the CLI and `docker logs`, and checks whether the screen clears or the title changes. This is non-destructive and local to that terminal.
+
+**Owner-observed result and fix:** Owner-observed against the 3f15c34 code with a loopback fixture: Node accepted a Content-Type with bytes 0x9B/0x9D, and the error message contained U+009B (CSI) and U+009D (OSC). Fixed in 3321540: header values in error messages are reduced to printable ASCII and capped at 60 chars; the same fixture now yields "not a web page (x??2J??0)".
