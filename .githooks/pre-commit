@@ -1,0 +1,26 @@
+#!/bin/sh
+# Refuses commits that contain secrets or personal data.
+# Enabled automatically by `npm install` (core.hooksPath=.githooks). Skip once, deliberately: git commit --no-verify
+set -eu
+fail=0
+
+# 1. personal files must never be committed, even with `git add -f`
+personal=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '(^|/)(\.env(\..*)?$|\.session\.json$|history\.json$|\.basket\.json$|families\.json$|\.agent-state\.json$|orders/|data/|debug/|test/fixtures/private/)' \
+  | grep -vE '(^|/)\.env\.example$' || true)
+if [ -n "$personal" ]; then
+  echo "✗ personal data staged – unstage it (git restore --staged <file>):"; echo "$personal" | sed 's/^/    /'; fail=1
+fi
+
+# 2. secrets in the staged changes
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --staged --redact --no-banner -v || fail=1
+else
+  # fallback until gitleaks is installed (brew install gitleaks / https://github.com/gitleaks/gitleaks)
+  hits=$(git diff --cached -U0 --diff-filter=ACMR | grep -E '^\+' | grep -nE \
+    'sk-ant-[A-Za-z0-9_-]{20,}|[0-9]{8,10}:[A-Za-z0-9_-]{35}|(MERCATOR_PASSWORD|ANTHROPIC_API_KEY|TELEGRAM_BOT_TOKEN)=[^[:space:]#]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{36}' || true)
+  if [ -n "$hits" ]; then echo "✗ looks like a secret in the staged changes:"; echo "$hits" | cut -c1-80 | sed 's/^/    /'; fail=1; fi
+  echo "(tip: install gitleaks for a thorough secret scan)"
+fi
+
+[ "$fail" = 0 ] || { echo "Commit refused."; exit 1; }

@@ -164,5 +164,12 @@ and prices only. The Telegram bot answers only the chat id in `TELEGRAM_CHAT_ID`
 Before publishing a fork: `git status --ignored` should list the files above as ignored, and `npm test` uses only
 made-up fixtures (`test/fixtures/`).
 
+## Before you commit
+`npm install` turns on a pre-commit hook (`.githooks/pre-commit`) that refuses commits containing your personal files
+(`.env`, `.session.json`, `orders/`, `history.json`, …) or anything that looks like a key or token. It uses
+[gitleaks](https://github.com/gitleaks/gitleaks) when installed (`brew install gitleaks`), else a built-in check.
+On GitHub, CI runs the tests, `npm audit` and gitleaks on every push; Dependabot proposes dependency, Docker image and
+Actions updates weekly.
+
 ## License
 [MIT](LICENSE) © 2026 Ino Murko
