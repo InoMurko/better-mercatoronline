@@ -1,6 +1,6 @@
 name: ci
 on:
-  push: { branches: [main] }
+  push: { branches: ["**"] }   # every branch – a leaked secret on a side branch is still public
   pull_request:
 permissions:
   contents: read
@@ -8,9 +8,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # actions pinned to exact commits (tag in the comment); Dependabot proposes updates
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { persist-credentials: false }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: "22.23.4", cache: npm }
       - run: npm ci
       - run: npm run typecheck
@@ -19,7 +20,11 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { fetch-depth: 0, persist-credentials: false }
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: No personal data files in the repository
+        run: |
+          bad=$(git ls-files -z | tr '\0' '\n' | grep -E '(^|/)(\.env(\..*)?$|\.session\.json$|history\.json$|\.basket\.json$|families\.json$|\.recipe-usage\.json$|\.agent-state\.json$|orders/|data/|debug/|test/fixtures/private/)' | grep -vE '(^|/)\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "personal data committed:"; echo "$bad"; exit 1; fi

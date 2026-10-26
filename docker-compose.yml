@@ -8,6 +8,9 @@ services:
     container_name: merc-agent
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]   # nothing in the container can gain privileges (setpriv only drops them)
+    # root in the entrypoint only needs to hand /data over and drop to that user; everything else is dropped
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]
     env_file: .env
     environment:
       TZ: ${TZ:-Europe/Ljubljana}     # the daily check runs at DAILY_CHECK_AT in this time zone

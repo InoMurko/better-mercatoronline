@@ -119,7 +119,9 @@ Notes
 - `.env` is passed in at run time and never copied into the image (`.dockerignore` keeps secrets and personal data out).
 - The daily check runs at `DAILY_CHECK_AT` in the container's time zone: `TZ` (default `Europe/Ljubljana`).
 - **File ownership:** the container starts as root only to see who owns `./data`, then runs everything as that user
-  (via `setpriv`), so files stay yours on Linux too. If Docker created `./data` (owned by root), it's handed to uid 1000.
+  (via `setpriv`), so files stay yours on Linux too. If Docker created `./data` (owned by root, still empty), it's handed to uid 1000; a root-owned folder that already
+  has files is refused rather than taken over. `MERC_UID`/`MERC_GID` must be numbers, never 0. The container keeps only
+  the `CHOWN`/`SETUID`/`SETGID` capabilities, which the entrypoint needs to hand `/data` over and drop to that user; the app itself has none.
   Force a user with `MERC_UID`/`MERC_GID` in `.env`. Files inside `./data` owned by someone else (e.g. copied with
   `sudo`) are reported at start with the fix: `sudo chown -R $(id -u):$(id -g) data`.
 
@@ -156,7 +158,7 @@ Everything personal stays on your machine and is in `.gitignore`:
 | `.env` | shop e-mail + password, Anthropic API key, Telegram bot token |
 | `.session.json` | shop login cookies (written with mode 600) – treat like a password |
 | `orders/`, `history.json` | your order history and products |
-| `.basket.json`, `families.json`, `.agent-state.json` | your basket, product groupings, state |
+| `.basket.json`, `families.json`, `.agent-state.json`, `.recipe-usage.json` | your basket, product groupings, state, recipe-limit timestamps |
 
 Your password is only sent to Mercator's own login form. Product replacements sent to Claude contain product names
 and prices only. The Telegram bot answers only the chat id in `TELEGRAM_CHAT_ID`.
