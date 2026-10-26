@@ -8,7 +8,7 @@
  *   npm run cli -- shop [--add]               the basket the agent thinks you need (--add puts it in the cart, asks first)
  *   npm run cli -- pick "toaletni papir" [--like "…"] [--qty 2] [--cheapest] [--add]
  *   npm run cli -- cheapest mleko [--category "SVEŽE MLEKO,TRAJNO MLEKO"] [--by unit|price] [--add] [--qty 1]
- *   npm run cli -- recipe <url> [--servings 6] [--add] [--no-llm]   recipe → products (--add puts them in the cart, asks first)
+ *   npm run cli -- recipe <url> [--servings 6] [--add]   recipe → products, needs ANTHROPIC_API_KEY (--add puts them in the cart, asks first)
  *   npm run cli -- cart [clear] [--yes]
  *   npm run cli -- checkout                   pick a slot, pay on delivery, review, confirm (asks; experimental)
  */
@@ -122,8 +122,8 @@ const commands: Record<string, () => Promise<void>> = {
     const url = rest[0];
     if (!url) throw new Error("usage: recipe <url> [--servings N] [--add]");
     const habits = await loadHabits(shop.anon, { historyLookups: 0 }).catch(() => []);
-    const plan = await recipeFromUrl(shop.anon, url, { useLlm: !values["no-llm"], habits, servings: num(values.servings) ?? null, log: () => undefined });
-    console.log(`${plan.title ?? "Recipe"}${plan.servings ? ` – ${plan.servings} servings` : ""}  (${plan.source === "structured" ? "site's recipe data" : "page text"}, read by ${plan.by})`);
+    const plan = await recipeFromUrl(shop.anon, url, { habits, servings: num(values.servings) ?? null, log: () => undefined });
+    console.log(`${plan.title ?? "Recipe"}${plan.servings ? ` – ${plan.servings} servings` : ""}  (${plan.source === "structured" ? "site's recipe data" : "page text"})`);
     for (const s of plan.suspicious) console.log(`  ⚠ instruction-like text on the page, ignored: ${JSON.stringify(s)}`);
     for (const l of plan.lines) {
       const what = l.product ? `${l.qty} × ${l.product.name} – ${eur(priceLine(l.product, l.qty).final)}` : "✗ nothing found";

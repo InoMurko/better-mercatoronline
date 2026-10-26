@@ -2,12 +2,12 @@
  * Ingredients → real Mercator products → a recipe basket you edit before anything reaches the cart.
  *
  * - candidates always come from the shop's own search; a product can only be one of those
- * - the optional AI pick sees only the cleaned search terms and the shop's product names (never the page text),
+ * - the AI pick sees only the cleaned search terms and the shop's product names (never the page text),
  *   and must answer with an id from the shortlist – anything else is ignored
  * - pack counts are worked out by code from the product's size; unusual amounts are flagged, and capped
  * - pantry staples, optional lines, and things your habits say you still have start as "at home"
  */
-import Anthropic from "@anthropic-ai/sdk";
+import { model, recipeAi, type Ai } from "./ai.ts";
 import { z } from "zod";
 import type { Http } from "../core/http.ts";
 import { mapLimit } from "../core/limiter.ts";
@@ -93,19 +93,15 @@ export function rankForIngredient(term: string, candidates: Product[], boughtBef
     .map((x) => x.p);
 }
 
-let client: Anthropic | null = null;
-const llm = () => (process.env.ANTHROPIC_API_KEY ? (client ??= new Anthropic()) : null);
-
 /** One call for the whole recipe: for each ingredient, pick the best product id from its own shortlist, or null. */
-async function aiPick(entries: { key: number; label: string; options: Product[] }[]): Promise<Map<number, string | null>> {
-  const ai = llm();
+async function aiPick(ai: Ai, entries: { key: number; label: string; options: Product[] }[]): Promise<Map<number, string | null>> {
   const out = new Map<number, string | null>();
-  if (!ai || !entries.length) return out;
+  if (!entries.length) return out;
   const list = entries
     .map((e) => [`#${e.key} ${e.label}`, ...e.options.map((p) => `   ${p.id} | ${p.name} | ${p.price.toFixed(2)} € | ${p.category}`)].join("\n"))
     .join("\n");
   const msg = await ai.messages.create({
-    model: process.env.ANTHROPIC_MODEL ?? "claude-haiku-5-5",
+    model: model(),
     max_tokens: 2000,
     system:
       "For each ingredient, pick the grocery product a home cook would buy for it from that ingredient's own candidate list " +
@@ -161,8 +157,9 @@ export async function matchRecipe(
   http: Http,
   src: { url: string; title: string | null; lines: string[]; servings: number | null },
   ingredients: Ingredient[],
-  opts: { useLlm?: boolean; habits?: Habit[]; boughtBefore?: Set<string>; servings?: number | null } = {},
+  opts: { ai?: Ai; habits?: Habit[]; boughtBefore?: Set<string>; servings?: number | null } = {},
 ): Promise<RecipePlan> {
+  const ai = opts.ai ?? recipeAi();
   const habits = opts.habits ?? [];
   const bought = opts.boughtBefore ?? new Set(habits.flatMap((h) => h.family.members.map((m) => m.name)));
   const found = await mapLimit(ingredients, 4, async (ing) => {
@@ -179,22 +176,18 @@ export async function matchRecipe(
     return ranked.slice(0, 6);
   });
 
-  let picks = new Map<number, string | null>();
-  if (opts.useLlm !== false) {
-    picks = await aiPick(
-      ingredients.flatMap((ing, k) => (found[k].length > 1 ? [{ key: k, label: `${ing.search}${ing.amount ? ` (${ing.amount} ${ing.unit ?? ""})` : ""}`, options: found[k] }] : [])),
-    ).catch((err) => {
-      console.log(`   (AI pick failed, using the ranking: ${err instanceof Error ? err.message : err})`);
-      return new Map<number, string | null>();
-    });
-  }
+  // the AI chooses for every ingredient with candidates – and may say none fits
+  const picks = await aiPick(
+    ai,
+    ingredients.flatMap((ing, k) => (found[k].length ? [{ key: k, label: `${ing.search}${ing.amount ? ` (${ing.amount} ${ing.unit ?? ""})` : ""}`, options: found[k] }] : [])),
+  );
 
   const base = src.servings;
   const servings = opts.servings ?? base;
   const scale = base && servings ? servings / base : 1;
   const lines: RecipeLine[] = ingredients.map((ing, k) => {
     const options = found[k];
-    const pickedId = picks.has(k) ? picks.get(k) : options[0]?.id ?? null;
+    const pickedId = picks.get(k) ?? null;
     const product = pickedId == null ? null : options.find((p) => p.id === pickedId) ?? null;
     const original = src.lines[ing.line] ?? ing.search;
     if (!product) return { ingredient: ing, original, product: null, qty: 0, include: false, why: "nothing suitable found in the shop", options };
@@ -230,8 +223,9 @@ const usage: number[] = [];
 export async function recipeFromUrl(
   http: Http,
   url: string,
-  opts: { useLlm?: boolean; habits?: Habit[]; servings?: number | null; fetch?: SafeFetchOptions; log?: (s: string) => void } = {},
-): Promise<RecipePlan & { suspicious: string[]; source: "structured" | "page"; by: "ai" | "parser" }> {
+  opts: { ai?: Ai; habits?: Habit[]; servings?: number | null; fetch?: SafeFetchOptions; log?: (s: string) => void } = {},
+): Promise<RecipePlan & { suspicious: string[]; source: "structured" | "page" }> {
+  const ai = opts.ai ?? recipeAi(); // no key → fail before fetching anything
   const log = opts.log ?? console.log;
   const now = Date.now();
   while (usage.length && now - usage[0] > 86_400_000) usage.shift();
@@ -243,14 +237,14 @@ export async function recipeFromUrl(
   log(`recipe ${page.url}${page.redirects.length ? ` (via ${page.redirects.length} redirect(s))` : ""}: ${src.kind}, ${src.lines.length} lines, "${src.title ?? "?"}"`);
   if (src.suspicious.length) log(`   ⚠ instruction-like text on the page: ${src.suspicious.map((s) => JSON.stringify(s)).join(", ")}`);
   if (!src.lines.length) throw new Error("couldn't find any ingredients on that page");
-  const parsed = await parseIngredients(src.lines, { useLlm: opts.useLlm, kind: src.kind });
+  const parsed = await parseIngredients(ai, src.lines);
   for (const i of parsed.ingredients) log(`   ${i.line}: ${JSON.stringify(src.lines[i.line])} → ${i.search} ${i.amount ?? ""}${i.unit ?? ""}${i.pantry ? " (pantry)" : ""}`);
   if (!parsed.ingredients.length) throw new Error("couldn't recognise any ingredients on that page");
   const plan = await matchRecipe(
     http,
     { url: page.url, title: src.title, lines: src.lines, servings: src.servings ?? parsed.servings },
     parsed.ingredients,
-    { useLlm: opts.useLlm, habits: opts.habits, servings: opts.servings },
+    { ai, habits: opts.habits, servings: opts.servings },
   );
-  return { ...plan, suspicious: src.suspicious, source: src.kind, by: parsed.by };
+  return { ...plan, suspicious: src.suspicious, source: src.kind };
 }

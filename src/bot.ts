@@ -371,9 +371,6 @@ async function startRecipe(ctx: Context, url: string) {
   const id = randomUUID().slice(0, 8);
   recipes.set(id, plan);
   while (recipes.size > 5) recipes.delete(recipes.keys().next().value!);
-  if (plan.by === "parser") {
-    await ctx.reply("(No ANTHROPIC_API_KEY – ingredients were read by a simple parser, without translation. Check the matches.)");
-  }
   const { text, kb } = renderRecipe(plan, id);
   await bot.api.sendMessage(ctx.chat!.id, text, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
 }
