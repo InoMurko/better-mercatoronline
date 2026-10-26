@@ -34,6 +34,9 @@ const { values, positionals } = parseArgs({
     category: { type: "string" }, servings: { type: "string" }, by: { type: "string", default: "unit" }, "no-llm": { type: "boolean", default: false },
   },
 });
+// files the agent creates (orders, history, basket, session) are readable by you only
+process.umask(0o077);
+
 const [command, ...rest] = positionals;
 const shop = new ShopSession();
 const eur = (n: number) => `${n.toFixed(2).replace(".", ",")} €`;

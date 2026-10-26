@@ -7,6 +7,7 @@ services:
     pull_policy: build                # always build locally – there's no published image to pull
     container_name: merc-agent
     restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]   # nothing in the container can gain privileges (setpriv only drops them)
     env_file: .env
     environment:
       TZ: ${TZ:-Europe/Ljubljana}     # the daily check runs at DAILY_CHECK_AT in this time zone

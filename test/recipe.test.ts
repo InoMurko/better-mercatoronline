@@ -73,6 +73,15 @@ test("Slovenian injection phrasing is flagged too", () => {
   assert.ok(r.suspicious.length >= 1);
 });
 
+test("hostile sizes stay fast; a page without <html> still works", () => {
+  const bomb = page(ld({ "@type": "Recipe", name: "x", recipeIngredient: ["<style".repeat(80_000), ...Array(5000).fill("<script")] }));
+  const t = Date.now();
+  extractRecipe(bomb + bomb + bomb + bomb);
+  assert.ok(Date.now() - t < 1500, `took ${Date.now() - t} ms`);
+  assert.deepEqual(extractRecipe('<script type="application/ld+json">{"@type":"Recipe","recipeIngredient":["1 egg"]}</script>').lines, ["1 egg"]);
+  assert.equal(extractRecipe("just text").kind, "page");
+});
+
 test("parseServings and cleanLine edge cases", () => {
   assert.equal(parseServings("serves 6"), 6);
   assert.equal(parseServings(["", "4 porcije"]), 4);

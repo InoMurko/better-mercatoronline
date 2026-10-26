@@ -7,7 +7,7 @@
  * send /start to your bot → it replies with your chat id → put TELEGRAM_CHAT_ID in .env → restart.
  * Only that chat can use the bot; everyone else is ignored.
  *
- * Nothing changes your cart without you pressing a button, and nothing is ever checked out.
+ * Nothing changes your cart without you pressing a button, and an order is only placed after your ✅ on its review.
  */
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import { Http } from "./core/http.ts";
@@ -25,6 +25,9 @@ import { confirmOrder, openDelivery, PAYMENT_METHODS, paymentMethod, prepareOrde
 import { cartLock } from "./shop/cart.ts";
 import { recipeFromUrl, rescale, toCartItems, type RecipePlan } from "./app/recipe-match.ts";
 import { renderRecipe } from "./app/recipe-view.ts";
+
+// files the agent creates (orders, history, basket, session) are readable by you only
+process.umask(0o077);
 
 const bot = new Bot(requireEnv("TELEGRAM_BOT_TOKEN"));
 const OWNER = process.env.TELEGRAM_CHAT_ID ? Number(process.env.TELEGRAM_CHAT_ID) : null;

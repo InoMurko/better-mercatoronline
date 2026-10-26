@@ -29,7 +29,8 @@ export type RecipeSource = {
 /** Collapse whitespace, drop control/invisible characters, strip any tags, cap the length. */
 export function cleanLine(s: unknown, max = MAX_LINE_CHARS): string {
   if (typeof s !== "string" && typeof s !== "number") return "";
-  let t = String(s);
+  // cap first: everything below is at least linear in the length, and the tag strip isn't
+  let t = String(s).slice(0, max * 4);
   if (/[<&]/.test(t)) {
     // JSON-LD strings sometimes carry HTML (<b>, &amp;) – keep only the text
     const { document } = parseHTML(`<!doctype html><html><body><div>${t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")}</div></body></html>`);
@@ -120,13 +121,14 @@ function structured(document: any): Omit<RecipeSource, "suspicious"> | null {
     }
     const recipe = findRecipe(json);
     if (!recipe) continue;
-    const ingredients = Array.isArray(recipe.recipeIngredient)
+    const all = Array.isArray(recipe.recipeIngredient)
       ? recipe.recipeIngredient
       : Array.isArray(recipe.ingredients)
         ? recipe.ingredients
         : typeof recipe.recipeIngredient === "string"
           ? recipe.recipeIngredient.split(/\n|;/)
           : [];
+    const ingredients = all.slice(0, MAX_LINES * 2);
     const lines = ingredients.map((l: unknown) => cleanLine(l)).filter(Boolean).slice(0, MAX_LINES);
     if (!lines.length) continue;
     return { kind: "structured", title: cleanLine(recipe.name, 120) || null, servings: parseServings(recipe.recipeYield ?? recipe.yield), lines };
@@ -147,7 +149,7 @@ function visibleText(document: any): Omit<RecipeSource, "suspicious"> {
   // an element that looks like the ingredient list, else the article / main content, else the body
   const candidates = [...document.querySelectorAll("[class*=ingredient i],[id*=ingredient i],[class*=sestavin i],[id*=sestavin i]")];
   const best = candidates.sort((a: any, b: any) => (b.textContent?.length ?? 0) - (a.textContent?.length ?? 0))[0];
-  const root = best ?? document.querySelector("article") ?? document.querySelector("main") ?? document.body;
+  const root = best ?? document.querySelector("article") ?? document.querySelector("main") ?? (document.documentElement ? document.body : null);
   for (const br of [...(root?.querySelectorAll?.("br") ?? [])]) br.replaceWith("\n");
   for (const el of [...(root?.querySelectorAll?.("p,li,div,tr,h1,h2,h3,h4,dt,dd") ?? [])]) el.append("\n");
   const text = String(root?.textContent ?? "").slice(0, MAX_PAGE_CHARS * 2);
@@ -171,7 +173,8 @@ const HIDING_PLACES =
 
 /** Read a recipe out of a page's HTML. The page is parsed, never executed. */
 export function extractRecipe(html: string): RecipeSource {
-  const { document } = parseHTML(html);
+  // a page without <html>…</html> still parses as a document
+  const { document } = parseHTML(/<html[\s>]/i.test(html.slice(0, 5000)) ? html : `<!doctype html><html><body>${html}</body></html>`);
   const hidden = [...document.querySelectorAll(HIDING_PLACES)].map((el: any) => String(el.textContent ?? "")).join("\n").slice(0, 200_000);
   const found = structured(document) ?? visibleText(document);
   // warn about AI-directed text in what we'll use, and in places a reader never sees
