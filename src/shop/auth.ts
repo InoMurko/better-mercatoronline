@@ -25,7 +25,8 @@ export async function login(http: Http, email: string, password: string): Promis
   if (!form) throw new Error("Couldn't find the login form on /prijava – the page changed (see docs/mercator-api.md §2)");
   const fields = setFields(form.fields, { txtUserName: email, txtPassword: password, chkRememberMe: "on" });
   const res = await http.request(form.action, { method: "POST", form: fields, retry: false });
-  if (!new URL(res.url).hostname.endsWith("mercatoronline.si")) {
+  const host = new URL(res.url).hostname;
+  if (host !== "mercatoronline.si" && !host.endsWith(".mercatoronline.si")) {
     // stayed on profil.mercator.si → wrong credentials, captcha, verification…
     const msg = res.text.match(/class="[^"]*(?:error|alert|validation)[^"]*"[^>]*>([^<]{3,200})</i)?.[1]?.trim();
     throw new Error(`Login failed${msg ? `: ${msg}` : ""} (ended on ${res.url.split("?")[0]})`);

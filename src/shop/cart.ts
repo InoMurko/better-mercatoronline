@@ -9,7 +9,8 @@ import type { Product } from "./products.ts";
 
 const CONF = { cartConf: "default" };
 const QUANTITY_LIMIT = "kosovne omejitve";
-export const cartLock = new Mutex();
+// a cart task that waits over 15 min for its turn gives up instead of queueing forever
+export const cartLock = new Mutex(15 * 60_000);
 
 export type CartLine = {
   itemId: string;
@@ -65,8 +66,14 @@ export type AddResult = { ok: boolean; note?: string };
 
 const errorText = (j: CartJson) => (j.error || j.message || "").replace(/<[^>]+>/g, "").trim();
 
+/** Quantities the agent will ever send for one product: positive (weighed goods can be fractional), at most 99. */
+export function checkQuantity(q: number): void {
+  if (!Number.isFinite(q) || q <= 0 || q > 99) throw new Error(`refusing quantity ${q} – it must be more than 0 and at most 99`);
+}
+
 /** Add one product (what the "DODAJ V KOŠARICO" button sends). */
 export function add(http: Http, product: Pick<Product, "id" | "gtin">, quantity: number): Promise<AddResult> {
+  checkQuantity(quantity);
   return cartLock.lock(async () => {
     const j = await http.json<CartJson>("/shop_cart/shop_cart/ajaxAddToCart", {
       "products[0][id]": product.id,
@@ -90,6 +97,7 @@ export async function addMany(
   items: { product: Pick<Product, "id" | "gtin" | "name">; qty: number }[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<AddResult[]> {
+  for (const it of items) checkQuantity(it.qty);
   if (process.env.MERCATOR_MULTI_ADD === "1" && items.length > 1) {
     const before = await readCart(http).catch(() => null);
     const form: [string, string][] = [];

@@ -44,6 +44,16 @@ export function toProduct(p: any): Product | null {
 
 const PAGE = 100;
 const cache = new Map<string, { at: number; value: Promise<Product[]> }>();
+/** The bot runs for weeks: keep at most this many listings, dropping expired and then oldest ones. */
+export const CACHE_MAX = 200;
+const CACHE_TTL = 10 * 60_000;
+function remember(key: string, value: Promise<Product[]>) {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.at >= CACHE_TTL) cache.delete(k);
+  while (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
+  cache.set(key, { at: now, value });
+}
+export const cacheSize = () => cache.size;
 
 function listingUrl(filter: Record<string, string>, offset: number) {
   const q = new URLSearchParams({ limit: String(PAGE), offset: String(offset), from: String(offset) });
@@ -55,7 +65,7 @@ function listingUrl(filter: Record<string, string>, offset: number) {
 export async function listing(http: Http, filter: Record<string, string>, max = PAGE): Promise<Product[]> {
   const key = `${JSON.stringify(filter)}|${max}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.value;
+  if (hit && Date.now() - hit.at < CACHE_TTL) return hit.value;
   const value = (async () => {
     const first = await http.json<{ products?: any[] }>(listingUrl(filter, 0));
     const raw = first.products ?? [];
@@ -65,7 +75,7 @@ export async function listing(http: Http, filter: Record<string, string>, max = 
     const rest = await Promise.all(offsets.map((o) => http.json<{ products?: any[] }>(listingUrl(filter, o)).then((r) => r.products ?? [])));
     return [raw, ...rest].flat().map(toProduct).filter((p): p is Product => !!p).slice(0, max);
   })();
-  cache.set(key, { at: Date.now(), value });
+  remember(key, value);
   value.catch(() => cache.delete(key));
   return value;
 }

@@ -3,11 +3,15 @@
  * redirects followed by hand so cookies are kept on every hop, a cap on parallel requests,
  * and retries with backoff for GETs (never for POSTs – an add-to-cart must not run twice).
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { CookieJar } from "tough-cookie";
 import { Limiter } from "./limiter.ts";
 
 export const BASE = "https://mercatoronline.si";
+/** Hosts the shop client may talk to (and their subdomains). Extra ones: MERCATOR_EXTRA_HOSTS=a.example,b.example */
+export const SHOP_HOSTS = ["mercatoronline.si", "mercator.si"];
+const TIMEOUT_MS = () => Number(process.env.MERCATOR_TIMEOUT_MS) || 30_000;
+const MAX_BODY = 10_000_000;
 
 export type Res = { status: number; url: string; headers: Headers; text: string };
 export type ReqOpts = {
@@ -28,13 +32,39 @@ export class HttpError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** The response body as text, refusing more than `max` bytes. */
+async function readCapped(res: Response, max: number): Promise<string> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) throw new HttpError(`response too big (${declared} bytes)`, res.status, res.url);
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => undefined);
+      throw new HttpError(`response too big (over ${max} bytes)`, res.status, res.url);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 export class Http {
   jar: CookieJar;
   private limiter: Limiter;
   requests = 0;
 
-  constructor(opts: { concurrency?: number; jar?: CookieJar; userAgent?: string } = {}) {
+  /** hosts (and subdomains) requests may go to – everything else is refused, including redirects */
+  readonly hosts: string[];
+
+  constructor(opts: { concurrency?: number; jar?: CookieJar; userAgent?: string; hosts?: string[] } = {}) {
     this.jar = opts.jar ?? new CookieJar();
+    const extra = (process.env.MERCATOR_EXTRA_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+    this.hosts = opts.hosts ?? [...SHOP_HOSTS, ...extra];
     this.limiter = new Limiter(opts.concurrency ?? (Number(process.env.MERCATOR_CONCURRENCY) || 4));
     this.userAgent =
       opts.userAgent ??
@@ -44,7 +74,16 @@ export class Http {
   readonly userAgent: string;
 
   abs(path: string) {
-    return new URL(path, BASE).toString();
+    return this.checkHost(new URL(path, BASE)).toString();
+  }
+
+  /** Only the shop's own hosts – a link or redirect elsewhere (from a changed or compromised page) is refused. */
+  private checkHost(url: URL): URL {
+    const host = url.hostname.toLowerCase();
+    if (!this.hosts.some((h) => host === h || host.endsWith(`.${h}`)))
+      throw new HttpError(`refusing to contact ${host} – not a Mercator host (set MERCATOR_EXTRA_HOSTS if the shop moved)`, 0, url.origin);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new HttpError(`refusing ${url.protocol} URL`, 0, url.origin);
+    return url;
   }
 
   /** One request (plus its redirects), within the concurrency cap. */
@@ -81,11 +120,14 @@ export class Http {
       const cookie = await this.jar.getCookieString(url);
       if (cookie) headers.Cookie = cookie;
       this.requests++;
-      const res = await fetch(url, { method, headers, body, redirect: "manual" });
+      // per hop: connect, headers and body within MERCATOR_TIMEOUT_MS (30 s) – a hung shop can't hold the cart lock forever
+      const res = await fetch(url, { method, headers, body, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS()) });
       for (const c of res.headers.getSetCookie()) await this.jar.setCookie(c, url, { ignoreError: true });
       const location = res.headers.get("location");
       if (res.status >= 300 && res.status < 400 && location) {
-        url = new URL(location, url).toString();
+        const next = this.checkHost(new URL(location, url));
+        if (new URL(url).protocol === "https:" && next.protocol !== "https:") throw new HttpError(`refusing a redirect from https to ${next.origin}`, res.status, url);
+        url = next.toString();
         if (res.status !== 307 && res.status !== 308) {
           method = "GET";
           body = undefined;
@@ -93,7 +135,7 @@ export class Http {
         await res.arrayBuffer().catch(() => undefined);
         continue;
       }
-      return { status: res.status, url, headers: res.headers, text: await res.text() };
+      return { status: res.status, url, headers: res.headers, text: await readCapped(res, MAX_BODY) };
     }
     throw new HttpError("Too many redirects", 0, url);
   }
@@ -117,6 +159,7 @@ export class Http {
 
   saveSession(file: string) {
     writeFileSync(file, JSON.stringify(this.jar.serializeSync()), { mode: 0o600 });
+    chmodSync(file, 0o600); // the mode above only applies when the file is created
   }
   loadSession(file: string): boolean {
     if (!existsSync(file)) return false;

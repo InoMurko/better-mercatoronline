@@ -33,3 +33,18 @@ test("short names for phone buttons", () => {
   assert.equal(shortName("Toaletni papir, Violeta, 3-slojni, 16/1", "VIOLETA"), "Toaletni papir, 3-slojni, 16/1"); // brand would make it 39
   assert.ok(shortName("Rumene breskve, cena za kg", null).length <= 38);
 });
+
+test("basket lines are capped at MAX_QTY", async () => {
+  const { addItem, changeQty, MAX_QTY } = await import("../src/app/basket.ts");
+  const p = { id: "1", name: "Jogurt", price: 1, unitPrice: null, unitBase: null, brand: null, category: "", url: "" };
+  let b = addItem({ id: "x", items: [] }, { product: p, qty: 300, note: "" });
+  assert.equal(b.items[0].qty, MAX_QTY);
+  b = addItem(b, { product: p, qty: 5, note: "" });
+  assert.equal(b.items[0].qty, MAX_QTY);
+  assert.equal(changeQty(b, 0, +1), b, "no change above the cap");
+  const { checkQuantity } = await import("../src/shop/cart.ts");
+  assert.throws(() => checkQuantity(-3));
+  assert.throws(() => checkQuantity(0));
+  assert.throws(() => checkQuantity(1000));
+  assert.doesNotThrow(() => checkQuantity(0.5));
+});

@@ -178,6 +178,24 @@ test("only lines marked 'buy' become basket items; servings rescale the packs", 
   assert.equal(rescale(plan(), 500).servings, 50, "servings are bounded");
 });
 
+test("two lines for the same product merge into one item, still capped", () => {
+  const p = plan();
+  p.lines.push({ ...p.lines[1], original: "more butter", qty: 5 });
+  const items = toCartItems(p);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].qty, 6);
+  assert.match(items[0].why!, /butter; more butter/);
+});
+
+test("RECIPES_PER_DAY must be a positive whole number, else 30", async () => {
+  const { recipesPerDay } = await import("../src/app/recipe-match.ts");
+  for (const [v, want] of [["5", 5], ["abc", 30], ["0", 30], ["-2", 30], ["2.5", 30]] as const) {
+    process.env.RECIPES_PER_DAY = v;
+    assert.equal(recipesPerDay(), want, v);
+  }
+  delete process.env.RECIPES_PER_DAY;
+});
+
 test("Telegram view escapes everything from the page", () => {
   const { text } = renderRecipe({ ...plan(), suspicious: ["<a href='https://evil'>click</a>"] }, "abc");
   assert.ok(!text.includes("<img"), "page HTML is escaped");

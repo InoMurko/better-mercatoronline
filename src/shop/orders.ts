@@ -10,7 +10,7 @@ import { formatOrder, type OrderLine } from "../app/order.ts";
 import { parseOrderDetails, parseOrderList, type ListedOrder } from "./pages.ts";
 
 export const ORDERS_DIR = "orders";
-const LIST_PATHS = ["/uporabnik/pretekli-nakupi"]; // the menu link "Moja naročila"; discovered again if it moves
+const LIST_PATHS = ["/uporabnik/pretekli-nakupi"]; // the menu link "Moja naročila"; discovered again if it moves (at most 3 kept)
 
 /** The order list. If the known address stops working, follow the account menu's "naročila" link. */
 export async function listOrders(http: Http): Promise<ListedOrder[]> {
@@ -24,7 +24,8 @@ export async function listOrders(http: Http): Promise<ListedOrder[]> {
   if (link) {
     const parsed = parseOrderList((await http.html(link)).text);
     if (parsed) {
-      LIST_PATHS.unshift(link);
+      if (!LIST_PATHS.includes(link)) LIST_PATHS.unshift(link);
+      LIST_PATHS.length = Math.min(LIST_PATHS.length, 3);
       return parsed;
     }
   }
@@ -60,7 +61,7 @@ export type ImportResult = { found: number; added: string[]; failed: string[] };
 /** Fetch orders not in orders/ yet – in parallel – and save each as orders/<date>-<nr>.txt. */
 export async function importNewOrders(http: Http, opts: { max?: number; concurrency?: number; log?: (s: string) => void } = {}): Promise<ImportResult> {
   const log = opts.log ?? console.log;
-  mkdirSync(ORDERS_DIR, { recursive: true });
+  mkdirSync(ORDERS_DIR, { recursive: true, mode: 0o700 });
   const all = (await listOrders(http)).filter((o) => /potrjen|zaključen|dostavljen|izdobavljen/i.test(o.status));
   const done = imported();
   const todo = all.filter((o) => !done.has(fileTag(o.orderNo))).slice(0, opts.max ?? Infinity);
@@ -73,7 +74,7 @@ export async function importNewOrders(http: Http, opts: { max?: number; concurre
       const { lines, notDelivered } = got;
       const file = join(ORDERS_DIR, `${o.date}-${fileTag(o.orderNo)}.txt`);
       const header = [`# date: ${o.date}`, `# order: ${o.orderNo}`, `# paid: ${o.paid ?? "?"}`, ...notDelivered.map((n) => `# not delivered: ${n}`)];
-      writeFileSync(file, formatOrder(lines, header));
+      writeFileSync(file, formatOrder(lines, header), { mode: 0o600 });
       const missing = notDelivered.length ? `, ${notDelivered.length} not delivered: ${notDelivered.join("; ")}` : "";
       result.added.push(`${o.date} #${o.orderNo} (${lines.length} products${missing})`);
       log(`  + ${file}: ${lines.length} products${missing}`);

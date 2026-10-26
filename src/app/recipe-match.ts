@@ -10,6 +10,7 @@
 import { model, recipeAi, type Ai } from "./ai.ts";
 import { z } from "zod";
 import type { Http } from "../core/http.ts";
+import { readFileSync, writeFileSync } from "node:fs";
 import { mapLimit } from "../core/limiter.ts";
 import { search, type Product } from "../shop/products.ts";
 import { contentOf, type Habit } from "./habits.ts";
@@ -209,15 +210,44 @@ export function rescale(plan: RecipePlan, servings: number): RecipePlan {
   };
 }
 
-export const toCartItems = (plan: RecipePlan): CartItem[] =>
-  plan.lines
-    .filter((l) => l.include && l.product && l.qty > 0)
-    .map((l) => ({ product: l.product!, qty: l.qty, note: `recipe${plan.title ? `: ${plan.title}` : ""}`, why: l.original }));
+/** Lines to buy → basket items. Two lines for the same product become one item, still capped at MAX_PACKS. */
+export function toCartItems(plan: RecipePlan): CartItem[] {
+  const byId = new Map<string, CartItem>();
+  for (const l of plan.lines) {
+    if (!l.include || !l.product || l.qty <= 0) continue;
+    const had = byId.get(l.product.id);
+    if (had) byId.set(l.product.id, { ...had, qty: Math.min(MAX_PACKS, had.qty + l.qty), why: `${had.why}; ${l.original}` });
+    else byId.set(l.product.id, { product: l.product, qty: Math.min(MAX_PACKS, l.qty), note: `recipe${plan.title ? `: ${plan.title}` : ""}`, why: l.original });
+  }
+  return [...byId.values()];
+}
 
 // ---------- the whole flow ----------
 
-const RECIPES_PER_DAY = () => Number(process.env.RECIPES_PER_DAY ?? 30);
-const usage: number[] = [];
+/** RECIPES_PER_DAY: a positive whole number; anything else means the default 30 (never "unlimited"). */
+export const recipesPerDay = () => {
+  const n = Number(process.env.RECIPES_PER_DAY ?? 30);
+  return Number.isInteger(n) && n > 0 ? n : 30;
+};
+const RECIPES_PER_DAY = recipesPerDay;
+/** Recent recipe reads, kept in .recipe-usage.json so a restart doesn't reset the daily limit. */
+const USAGE_FILE = ".recipe-usage.json";
+const usage: number[] = (() => {
+  try {
+    const v = JSON.parse(readFileSync(USAGE_FILE, "utf8"));
+    return Array.isArray(v) ? v.filter((x) => typeof x === "number").slice(-1000) : [];
+  } catch {
+    return [];
+  }
+})();
+const saveUsage = () => {
+  if (process.env.NODE_TEST_CONTEXT) return; // tests don't leave files behind
+  try {
+    writeFileSync(USAGE_FILE, JSON.stringify(usage), { mode: 0o600 });
+  } catch {
+    // read-only folder: the limit still holds until restart
+  }
+};
 
 /** link → safe fetch → ingredient lines → shopping list → products. Nothing touches the cart. */
 export async function recipeFromUrl(
@@ -231,6 +261,7 @@ export async function recipeFromUrl(
   while (usage.length && now - usage[0] > 86_400_000) usage.shift();
   if (usage.length >= RECIPES_PER_DAY()) throw new Error(`daily limit of ${RECIPES_PER_DAY()} recipes reached (RECIPES_PER_DAY)`);
   usage.push(now);
+  saveUsage();
 
   const page = await safeFetchHtml(url, opts.fetch);
   const src = extractRecipe(page.html);

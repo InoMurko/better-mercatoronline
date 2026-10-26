@@ -7,6 +7,8 @@ import type { CartItem } from "./restock.ts";
 import { priceLine } from "./offers.ts";
 
 export const BASKET_FILE = ".basket.json";
+/** Most of one product per basket line – a slip of the thumb (or a merged recipe) can't add 300 yoghurts. */
+export const MAX_QTY = 50;
 export type Basket = { id: string; items: CartItem[] };
 
 /** Final total, with quantity offers applied (see offers.ts). */
@@ -17,9 +19,9 @@ export const regularTotal = (b: Basket) => b.items.reduce((s, i) => s + priceLin
 /** Add a product, or raise its quantity when it's already in the basket. */
 export function addItem(b: Basket, item: CartItem): Basket {
   const at = b.items.findIndex((i) => i.product.id === item.product.id);
-  if (at < 0) return { ...b, items: [...b.items, item] };
+  if (at < 0) return { ...b, items: [...b.items, { ...item, qty: Math.min(MAX_QTY, Math.max(1, Math.round(item.qty))) }] };
   const items = [...b.items];
-  items[at] = { ...items[at], qty: items[at].qty + item.qty };
+  items[at] = { ...items[at], qty: Math.min(MAX_QTY, items[at].qty + item.qty) };
   return { ...b, items };
 }
 
@@ -29,6 +31,7 @@ export function changeQty(b: Basket, index: number, delta: number): Basket {
   if (!item) return b;
   const qty = item.qty + delta;
   if (qty < 1) return removeItem(b, index);
+  if (qty > MAX_QTY) return b;
   const items = [...b.items];
   items[index] = { ...item, qty };
   return { ...b, items };
@@ -44,7 +47,7 @@ export function loadBasket(): Basket | null {
   }
 }
 export function saveBasket(b: Basket | null) {
-  writeFileSync(BASKET_FILE, JSON.stringify(b, null, 2) + "\n");
+  writeFileSync(BASKET_FILE, JSON.stringify(b, null, 2) + "\n", { mode: 0o600 });
 }
 
 /**

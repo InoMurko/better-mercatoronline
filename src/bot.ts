@@ -18,16 +18,23 @@ import { importNewOrders } from "./shop/orders.ts";
 import { loadHistory, pendingLookups, rebuildHistory } from "./app/history.ts";
 import { fmtProduct, planPick } from "./app/picking.ts";
 import { addItems, buildBasket, defaultHorizon, describeHabit, loadHabits, type CartItem } from "./app/restock.ts";
-import { addItem, changeQty, loadBasket, removeItem, saveBasket, type Basket } from "./app/basket.ts";
+import { addItem, changeQty, loadBasket, MAX_QTY, removeItem, saveBasket, type Basket } from "./app/basket.ts";
 import { priceLine } from "./app/offers.ts";
 import { renderBasket } from "./app/basket-view.ts";
 import { confirmOrder, openDelivery, PAYMENT_METHODS, paymentMethod, prepareOrder, type DeliveryStep, type Review, type Slot } from "./shop/checkout.ts";
 import { cartLock } from "./shop/cart.ts";
 import { recipeFromUrl, rescale, toCartItems, type RecipePlan } from "./app/recipe-match.ts";
 import { renderRecipe } from "./app/recipe-view.ts";
+import { admit, shouldLog } from "./app/access.ts";
+import { describeError, installSafeConsole, logError } from "./core/log.ts";
+import { securePrivateFiles } from "./core/files.ts";
 
+// logs: no control characters from other people's text, no secrets
+installSafeConsole();
 // files the agent creates (orders, history, basket, session) are readable by you only
 process.umask(0o077);
+// …and files an older version created get fixed
+if (securePrivateFiles()) console.log("  made existing data files readable by you only");
 
 const bot = new Bot(requireEnv("TELEGRAM_BOT_TOKEN"));
 const OWNER = process.env.TELEGRAM_CHAT_ID ? Number(process.env.TELEGRAM_CHAT_ID) : null;
@@ -62,12 +69,29 @@ type Pending =
   | { kind: "tobasket"; item: CartItem }
   | { kind: "slots"; slots: Slot[] }
   | { kind: "order"; slot: Slot; review: Review };
-const pending = new Map<string, Pending & { at: number }>();
+const PENDING_TTL = 24 * 3600_000;
+const pending = new Map<string, Pending & { at: number; pair?: string }>();
 function remember(p: Pending): string {
-  for (const [id, v] of pending) if (Date.now() - v.at > 24 * 3600_000) pending.delete(id);
+  for (const [id, v] of pending) if (Date.now() - v.at > PENDING_TTL) pending.delete(id);
+  while (pending.size >= 200) pending.delete(pending.keys().next().value!);
   const id = randomUUID().slice(0, 8);
   pending.set(id, { ...p, at: Date.now() });
   return id;
+}
+/** A waiting action – or undefined when it's unknown or older than 24 h (old buttons stop working). */
+function lookup(id: string) {
+  const p = pending.get(id);
+  if (p && Date.now() - p.at > PENDING_TTL) {
+    pending.delete(id);
+    return undefined;
+  }
+  return p;
+}
+/** Use up a waiting action, and the alternative offered next to it ("to basket" vs "straight to cart"). */
+function consume(id: string) {
+  const p = pending.get(id);
+  pending.delete(id);
+  if (p?.pair) pending.delete(p.pair);
 }
 
 const confirmButtons = (id: string, yes = "✅ Add to cart") => new InlineKeyboard().text(yes, `ok:${id}`).text("❌ Skip", `no:${id}`);
@@ -80,28 +104,26 @@ async function work<T>(ctx: Context, what: string, task: (http: Http) => Promise
     const http = opts.loggedIn === false ? shop.anon : await shop.loggedIn();
     return await task(http);
   } catch (err) {
-    console.error(`${what} failed:`, err);
-    await ctx.reply(`⚠️ ${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+    logError(`${what} failed`, err);
+    await ctx.reply(`⚠️ ${what} failed: ${describeError(err)}`);
     return undefined;
   }
 }
 
 // ---------- access control ----------
 
+const ignoredChats = new Map<number, number>();
 bot.use(async (ctx, next) => {
   const chatId = ctx.chat?.id;
-  if (OWNER == null) {
-    if (ctx.message?.text?.startsWith("/start") && chatId) {
-      console.log(`→ /start from chat ${chatId} (@${ctx.from?.username ?? "?"}). Put TELEGRAM_CHAT_ID=${chatId} in .env and restart.`);
-      await ctx.reply(`Your chat id is ${chatId}.\nPut TELEGRAM_CHAT_ID=${chatId} in the agent's .env and restart it – until then I won't do anything.`);
-    }
+  const verdict = admit({ chat: ctx.chat, from: ctx.from, text: ctx.message?.text }, OWNER);
+  if (verdict === "owner") return next();
+  if (verdict === "setup" && chatId) {
+    console.log(`→ /start from chat ${chatId}. Put TELEGRAM_CHAT_ID=${chatId} in .env and restart.`);
+    await ctx.reply(`Your chat id is ${chatId}.\nPut TELEGRAM_CHAT_ID=${chatId} in the agent's .env and restart it – until then I won't do anything.`);
     return;
   }
-  if (chatId !== OWNER) {
-    console.log(`ignored message from chat ${chatId} (@${ctx.from?.username ?? "?"})`);
-    return;
-  }
-  await next();
+  // everyone else: no answer, and at most one log line per chat per hour
+  if (chatId != null && shouldLog(ignoredChats, chatId)) console.log(`ignored update from chat ${chatId} (${ctx.chat?.type ?? "?"})`);
 });
 
 // ---------- commands ----------
@@ -178,6 +200,11 @@ bot.command(["due", "restock"], async (ctx) => {
 // ---------- shopping basket ----------
 
 let basket: Basket | null = loadBasket();
+/** Every change gets a new id, so buttons on an older copy of the basket message can't change the wrong line. */
+function setBasket(b: Basket | null) {
+  basket = b ? { ...b, id: randomUUID().slice(0, 8) } : null;
+  saveBasket(basket);
+}
 
 // ---------- checkout: slot → pay on delivery → review → your ✅ ----------
 
@@ -330,11 +357,14 @@ async function pickFor(ctx: Context, query: string, like?: string) {
   if (plan.choice) {
     const item: CartItem = { product: plan.choice, qty: plan.qty, note: "your choice" };
     const pl = priceLine(plan.choice, plan.qty);
-    const kb = basket
-      ? new InlineKeyboard()
-          .text(`🧺 Add ${plan.qty} × to basket`, `ok:${remember({ kind: "tobasket", item })}`)
-          .text(`🛒 Straight to cart`, `ok:${remember({ kind: "add", items: [item] })}`)
-      : confirmButtons(remember({ kind: "add", items: [item] }), `✅ Add ${plan.qty} × (${eur(pl.final)})`);
+    let kb: InlineKeyboard;
+    if (basket) {
+      const toBasket = remember({ kind: "tobasket", item });
+      const toCart = remember({ kind: "add", items: [item] });
+      pending.get(toBasket)!.pair = toCart; // using one of the two buttons cancels the other
+      pending.get(toCart)!.pair = toBasket;
+      kb = new InlineKeyboard().text(`🧺 Add ${plan.qty} × to basket`, `ok:${toBasket}`).text(`🛒 Straight to cart`, `ok:${toCart}`);
+    } else kb = confirmButtons(remember({ kind: "add", items: [item] }), `✅ Add ${plan.qty} × (${eur(pl.final)})`);
     const extra = [
       pl.regular > pl.final + 0.004 ? `${plan.qty} × now ${eur(pl.final)} instead of ${eur(pl.regular)}` : "",
       pl.notes.length ? `🏷 ${pl.notes.join(" · ")}` : "",
@@ -372,7 +402,12 @@ async function startRecipe(ctx: Context, url: string) {
   recipes.set(id, plan);
   while (recipes.size > 5) recipes.delete(recipes.keys().next().value!);
   const { text, kb } = renderRecipe(plan, id);
-  await bot.api.sendMessage(ctx.chat!.id, text, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
+  try {
+    await bot.api.sendMessage(ctx.chat!.id, text, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
+  } catch (err) {
+    logError("sending the recipe", err);
+    await ctx.reply(`⚠️ Couldn't show that recipe: ${describeError(err)}`);
+  }
 }
 
 bot.command("recipe", async (ctx) => {
@@ -431,9 +466,9 @@ bot.on("callback_query:data", async (ctx, next) => {
       if (!items.length) return ctx.reply("Everything is marked 🏠 at home – nothing to add.");
       recipes.delete(rid);
       await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
-      basket ??= { id: randomUUID().slice(0, 8), items: [] };
-      for (const it of items) basket = addItem(basket, it);
-      saveBasket(basket);
+      let b: Basket = basket ?? { id: "", items: [] };
+      for (const it of items) b = addItem(b, it);
+      setBasket(b);
       await ctx.reply(`🧺 Added ${items.length} products from the recipe to your basket. Check it, then ✅ puts it in the cart.`);
       return showBasket(ctx.chat!.id);
     } else return ctx.answerCallbackQuery();
@@ -448,12 +483,12 @@ bot.on("callback_query:data", async (ctx, next) => {
       await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
       return startCheckout(ctx);
     }
-    const p = pending.get(cid);
+    const p = lookup(cid);
     if (op === "nop") return;
     if (!p) return ctx.reply("That expired – /checkout to start again.");
     await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
     if (op === "no") {
-      pending.delete(cid);
+      consume(cid);
       return ctx.reply("OK – nothing ordered. Your cart stays as it is.");
     }
     if (op === "slot" && p.kind === "slots") {
@@ -461,7 +496,7 @@ bot.on("callback_query:data", async (ctx, next) => {
       if (slot) return prepareAndShow(ctx, slot);
     }
     if (op === "go" && p.kind === "order") {
-      pending.delete(cid); // one tap = one order, even if you double-tap
+      consume(cid); // one tap = one order, even if you double-tap
       return placeOrder(ctx, p);
     }
     return;
@@ -470,7 +505,13 @@ bot.on("callback_query:data", async (ctx, next) => {
 
   const [, op, idx, id, pageStr] = data.split(":");
   const page = Number(pageStr) || 0;
-  if (!basket || basket.id !== id) {
+  if (basket && basket.id !== id) {
+    // an older copy of the basket message: its buttons point at lines that may have moved
+    await ctx.answerCallbackQuery({ text: "That message is out of date – here's the current basket." });
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
+    return showBasket(ctx.chat!.id);
+  }
+  if (!basket) {
     await ctx.answerCallbackQuery({ text: "That basket is gone – /shop builds a new one." });
     return ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
   }
@@ -514,7 +555,7 @@ bot.on("callback_query:data", async (ctx, next) => {
       r = await addItems(await shop.loggedIn(), b.items, progress);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("put in cart failed:", err);
+      logError("put in cart failed", err);
       await ctx.reply(`⚠️ Couldn't start adding to the cart: ${msg}\nThe basket is kept – fix the problem and tap ✅ again.`);
     }
     if (!r) {
@@ -546,8 +587,10 @@ bot.on("callback_query:data", async (ctx, next) => {
     return;
   }
   const name = basket.items[n]?.product.name ?? "";
-  basket = op === "inc" ? changeQty(basket, n, +1) : op === "dec" ? changeQty(basket, n, -1) : op === "del" ? removeItem(basket, n) : basket;
-  saveBasket(basket);
+  const before = basket;
+  const after = op === "inc" ? changeQty(basket, n, +1) : op === "dec" ? changeQty(basket, n, -1) : op === "del" ? removeItem(basket, n) : basket;
+  if (after === before && op === "inc") return ctx.answerCallbackQuery({ text: `That's the most I'll put in one line (${MAX_QTY}).` });
+  setBasket(after);
   const now = basket.items.find((i) => i.product.name === name)?.qty ?? 0;
   await ctx.answerCallbackQuery({ text: now ? `${now}× ${name.slice(0, 60)}` : `Removed ${name.slice(0, 60)}` });
   return updateBasketMessage(ctx, page);
@@ -562,7 +605,7 @@ async function updateBasketMessage(ctx: Context, page: number) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/message is not modified/i.test(msg)) return;
-    console.error("basket: couldn't update the message –", msg);
+    console.error("basket: couldn't update the message –", describeError(err));
     await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
     await showBasket(ctx.chat!.id, page);
   }
@@ -570,13 +613,13 @@ async function updateBasketMessage(ctx: Context, page: number) {
 
 bot.on("callback_query:data", async (ctx) => {
   const [action, id, idx] = ctx.callbackQuery.data.split(":");
-  const p = pending.get(id);
+  const p = lookup(id);
   await ctx.answerCallbackQuery();
   if (!p) return ctx.reply("That request expired – ask again.");
   await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
 
   if (action === "no") {
-    pending.delete(id);
+    consume(id);
     return ctx.reply("OK, left the cart alone.");
   }
   if (action === "like" && p.kind === "like") {
@@ -585,14 +628,13 @@ bot.on("callback_query:data", async (ctx) => {
     return;
   }
   if (action === "ok" && p.kind === "tobasket") {
-    pending.delete(id);
+    consume(id);
     if (!basket) return ctx.reply("No basket open any more – /shop builds one.");
-    basket = addItem(basket, p.item);
-    saveBasket(basket);
+    setBasket(addItem(basket, p.item));
     return showBasket(ctx.chat!.id);
   }
   if (action === "ok" && p.kind === "add") {
-    pending.delete(id);
+    consume(id);
     const r = await work<{ ok: boolean; problems: string[] }>(ctx, "Adding to the cart", (http) =>
       p.items.length === 1
         ? add(http, p.items[0].product, p.items[0].qty).then((x) => ({ ok: x.ok, problems: x.ok ? [] : [x.note ?? "cart didn't change"] }))
@@ -602,7 +644,7 @@ bot.on("callback_query:data", async (ctx) => {
     return ctx.reply(r.ok ? "✓ In the cart. Check out on mercatoronline.si when you're ready." : `Added, but please check:\n${r.problems.join("\n")}`);
   }
   if (action === "ok" && p.kind === "clear") {
-    pending.delete(id);
+    consume(id);
     const ok = await work<boolean>(ctx, "Emptying the cart", (http) => clearCart(http));
     if (ok !== undefined) return ctx.reply(ok ? "🗑 Cart emptied." : "⚠️ Couldn't empty the cart – check it in the browser.");
   }
@@ -628,7 +670,7 @@ async function refreshInBackground() {
       console.log(`  background: ${left} left`);
     }
   } catch (err) {
-    console.error("background refresh failed:", err instanceof Error ? err.message : err);
+    console.error("background refresh failed:", describeError(err));
   } finally {
     refreshing = false;
   }
@@ -643,22 +685,23 @@ function scheduleDaily() {
   next.setHours(h, m || 0, 0, 0);
   if (next <= new Date()) next.setDate(next.getDate() + 1);
   setTimeout(async () => {
+    scheduleDaily(); // tomorrow's check is set up first, so a hung import can't stop the daily checks
     try {
       // new orders first, so a delivery you already got isn't proposed again
       await importNewOrders(await shop.loggedIn(), { log: () => undefined });
       await refreshInBackground();
       await dueReport(OWNER, { quietIfNothing: true });
     } catch (err) {
-      await send(OWNER, `⚠️ Daily check failed: ${esc(err instanceof Error ? err.message : String(err))}`).catch(() => undefined);
+      logError("daily check failed", err);
+      await send(OWNER, `⚠️ Daily check failed: ${esc(describeError(err))}`).catch(() => undefined);
     }
-    scheduleDaily();
   }, next.getTime() - Date.now());
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const offset = new Intl.DateTimeFormat("en", { timeZone: zone, timeZoneName: "shortOffset" }).formatToParts(next).find((p) => p.type === "timeZoneName")?.value;
   console.log(`  daily check at ${next.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} ${zone} (${offset}) – set TZ to change the zone`);
 }
 
-bot.catch((err) => console.error("bot error:", err.error));
+bot.catch((err) => logError("bot error", err.error));
 await bot.api.setMyCommands(COMMANDS.map(({ command, description }) => ({ command, description })));
 console.log(OWNER == null ? "→ Bot running. Send /start to it on Telegram to get your chat id." : `→ Bot running for chat ${OWNER}.`);
 scheduleDaily();

@@ -111,3 +111,20 @@ test("too big (declared, streamed, or a gzip bomb), not HTML, or too slow → re
     s.close();
   }
 });
+
+test("a refused page's socket is closed, not drained forever", async () => {
+  let closed = false;
+  const s = await server((req, res) => {
+    res.on("close", () => (closed = true));
+    res.writeHead(200, { "Content-Type": "application/octet-stream" });
+    const t = setInterval(() => res.write("x".repeat(1000)), 5); // endless body
+    res.on("close", () => clearInterval(t));
+  });
+  try {
+    await assert.rejects(safeFetchHtml(`${s.base}/stream-forever`, s.opts), BlockedUrlError);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(closed, true);
+  } finally {
+    s.close();
+  }
+});

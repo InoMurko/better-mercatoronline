@@ -6,7 +6,7 @@ fail=0
 
 # 1. personal files must never be committed, even with `git add -f`
 personal=$(git diff --cached --name-only --diff-filter=ACMR \
-  | grep -E '(^|/)(\.env(\..*)?$|\.session\.json$|history\.json$|\.basket\.json$|families\.json$|\.agent-state\.json$|orders/|data/|debug/|test/fixtures/private/)' \
+  | grep -E '(^|/)(\.env(\..*)?$|\.session\.json$|history\.json$|\.basket\.json$|families\.json$|\.recipe-usage\.json$|\.agent-state\.json$|orders/|data/|debug/|test/fixtures/private/)' \
   | grep -vE '(^|/)\.env\.example$' || true)
 if [ -n "$personal" ]; then
   echo "✗ personal data staged – unstage it (git restore --staged <file>):"; echo "$personal" | sed 's/^/    /'; fail=1

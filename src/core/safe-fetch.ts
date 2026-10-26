@@ -174,16 +174,16 @@ function oneHop(url: URL, opts: Required<Pick<SafeFetchOptions, "maxBytes">> & S
       (res) => {
         const status = res.statusCode ?? 0;
         if (status >= 300 && status < 400) {
-          res.resume();
+          res.destroy(); // don't keep reading what a stranger's server sends
           return resolve({ status, location: res.headers.location });
         }
         if (status < 200 || status >= 300) {
-          res.resume();
+          res.destroy(); // don't keep reading what a stranger's server sends
           return reject(new Error(`the page answered ${status}`));
         }
         const type = String(res.headers["content-type"] ?? "");
         if (!/^\s*(text\/html|application\/xhtml\+xml)\b/i.test(type)) {
-          res.resume();
+          res.destroy(); // don't keep reading what a stranger's server sends
           return reject(new BlockedUrlError(`not a web page (${shown(type.split(";")[0]) || "no content type"})`));
         }
         const declared = Number(res.headers["content-length"]);
@@ -240,5 +240,6 @@ export async function safeFetchHtml(raw: string, options: SafeFetchOptions = {})
     }
   } finally {
     clearTimeout(timer);
+    ctrl.abort(); // close anything still open (a redirect body, a refused page) – nothing outlives the call
   }
 }

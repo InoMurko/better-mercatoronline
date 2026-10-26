@@ -8,7 +8,7 @@
  *   npm run cli -- shop [--add]               the basket the agent thinks you need (--add puts it in the cart, asks first)
  *   npm run cli -- pick "toaletni papir" [--like "…"] [--qty 2] [--cheapest] [--add]
  *   npm run cli -- cheapest mleko [--category "SVEŽE MLEKO,TRAJNO MLEKO"] [--by unit|price] [--add] [--qty 1]
- *   npm run cli -- recipe <url> [--servings 6] [--add]   recipe → products, needs ANTHROPIC_API_KEY (--add puts them in the cart, asks first)
+ *   npm run cli -- recipe <url> [--servings 6] [--add]   recipe → products, needs ANTHROPIC_API_KEY (--add always asks; --yes doesn't apply) (--add puts them in the cart, asks first)
  *   npm run cli -- cart [clear] [--yes]
  *   npm run cli -- checkout                   pick a slot, pay on delivery, review, confirm (asks; experimental)
  */
@@ -24,6 +24,8 @@ import { confirmOrder, openDelivery, PAYMENT_METHODS, paymentMethod, prepareOrde
 import { importNewOrders } from "./shop/orders.ts";
 import { findCheapest } from "./shop/products.ts";
 import { recipeFromUrl, toCartItems } from "./app/recipe-match.ts";
+import { installSafeConsole } from "./core/log.ts";
+import { securePrivateFiles } from "./core/files.ts";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -34,16 +36,28 @@ const { values, positionals } = parseArgs({
     category: { type: "string" }, servings: { type: "string" }, by: { type: "string", default: "unit" }, "no-llm": { type: "boolean", default: false },
   },
 });
-// files the agent creates (orders, history, basket, session) are readable by you only
+// terminal output: no control characters from shop/page/model text, no secrets
+installSafeConsole();
+// files the agent creates (orders, history, basket, session) are readable by you only – old ones get fixed
 process.umask(0o077);
+securePrivateFiles();
 
 const [command, ...rest] = positionals;
 const shop = new ShopSession();
 const eur = (n: number) => `${n.toFixed(2).replace(".", ",")} €`;
 const num = (s?: string) => (s ? Number(s) || undefined : undefined);
+/** --qty: a positive number, at most 50. */
+function qtyArg(): number | undefined {
+  if (values.qty == null) return undefined;
+  const q = Number(values.qty);
+  if (!Number.isFinite(q) || q <= 0 || q > 50) throw new Error(`--qty must be more than 0 and at most 50 (got ${values.qty})`);
+  return q;
+}
 
-async function ask(question: string): Promise<boolean> {
-  if (values.yes) return true;
+/** y/N question. --yes answers it for you – except where noted (recipes: the products come from someone else's page). */
+async function ask(question: string, { allowYes = true } = {}): Promise<boolean> {
+  if (values.yes && allowYes) return true;
+  if (values.yes) console.log("  (--yes doesn't apply here – please confirm yourself)");
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const a = (await rl.question(`${question} [y/N] `)).trim();
   rl.close();
@@ -92,7 +106,7 @@ const commands: Record<string, () => Promise<void>> = {
   },
 
   async pick() {
-    const plan = await planPick(shop.anon, rest.join(" "), { like: values.like, qty: num(values.qty), cheapest: values.cheapest, useLlm: !values["no-llm"] });
+    const plan = await planPick(shop.anon, rest.join(" "), { like: values.like, qty: qtyArg(), cheapest: values.cheapest, useLlm: !values["no-llm"] });
     for (const l of plan.lines) console.log(l);
     for (const n of plan.alsoBought) console.log(`   also bought: ${n}  → --like "${n}"`);
     if (!plan.choice) return plan.options.forEach((p) => console.log(`   ${fmtProduct(p)}  [${p.category}]`));
@@ -111,7 +125,7 @@ const commands: Record<string, () => Promise<void>> = {
     });
     if (!ranked.length) throw new Error("No matching products");
     for (const p of ranked.slice(0, 5)) console.log(`  ${fmtProduct(p)}  [${p.category}]`);
-    const qty = num(values.qty) ?? 1;
+    const qty = qtyArg() ?? 1;
     if (values.add && (await ask(`Add ${qty} × ${ranked[0].name}?`))) {
       const r = await add(await shop.loggedIn(), ranked[0], qty);
       console.log(r.ok ? "✓ added" : `✗ ${r.note}`);
@@ -131,7 +145,7 @@ const commands: Record<string, () => Promise<void>> = {
     }
     const items = toCartItems(plan);
     console.log(`  ${items.length} to buy ≈ ${eur(items.reduce((s, i) => s + priceLine(i.product, i.qty).final, 0))}  ("home" lines are left out)`);
-    if (!values.add || !items.length || !(await ask(`Put these ${items.length} in the cart?`))) return;
+    if (!values.add || !items.length || !(await ask(`Put these ${items.length} in the cart?`, { allowYes: false }))) return;
     const r = await addItems(await shop.loggedIn(), items, (d, n) => process.stdout.write(`\r  ${d}/${n}`));
     console.log(`\n✓ ${r.added}/${items.length} added`);
     for (const p of r.problems) console.log(`  ✗ ${p}`);
@@ -163,7 +177,7 @@ const commands: Record<string, () => Promise<void>> = {
     const typed = (await rl2.question('Type "order" to place it: ')).trim();
     rl2.close();
     if (typed !== "order") return console.log("Not ordered.");
-    const r = await confirmOrder(http, review, process.env.DELIVERY_NOTE || undefined);
+    const r = await confirmOrder(http, review, process.env.DELIVERY_NOTE || undefined, method);
     console.log(`🎉 Order placed${r.orderNo ? ` – #${r.orderNo}` : ""}. ${r.message}`);
   },
 };

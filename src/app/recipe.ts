@@ -39,7 +39,7 @@ export function cleanLine(s: unknown, max = MAX_LINE_CHARS): string {
   t = t
     .normalize("NFC")
     // zero-width / bidi controls are a classic way to hide text
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f­​-‏‪-‮⁠-⁤﻿]/g, "")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;

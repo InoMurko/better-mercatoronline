@@ -5,7 +5,8 @@ import { esc, eur } from "./basket-view.ts";
 import { priceLine } from "./offers.ts";
 import type { RecipePlan } from "./recipe-match.ts";
 
-export const RECIPE_PAGE = 10;
+// 8 lines × (product, price, note, original ≤ 120 chars) keeps one page well under Telegram's 4096 characters
+export const RECIPE_PAGE = 8;
 
 export const recipeTotal = (plan: RecipePlan) =>
   plan.lines.filter((l) => l.include && l.product).reduce((s, l) => s + priceLine(l.product!, l.qty).final, 0);
@@ -24,7 +25,7 @@ export function renderRecipe(plan: RecipePlan & { suspicious?: string[] }, id: s
   if (plan.suspicious?.length)
     head.push(`⚠️ <b>This page contains text aimed at an AI</b> (e.g. “${esc(plan.suspicious[0])}”). It was treated as plain text – check the list carefully.`);
   const body = shown.map((l) => {
-    const orig = `   <i>“${esc(l.original)}”</i>`;
+    const orig = `   <i>“${esc(l.original.length > 120 ? `${l.original.slice(0, 119)}…` : l.original)}”</i>`;
     if (!l.product) return `✗ ${esc(l.ingredient.search)} – ${esc(l.why)}\n${orig}`;
     const price = eur(priceLine(l.product, l.qty).final);
     const mark = l.include ? "🛒" : "🏠";

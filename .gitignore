@@ -18,6 +18,8 @@ history.json
 # your basket, product groupings, state
 .basket.json
 families.json
+# recipe-limit bookkeeping
+.recipe-usage.json
 .agent-state.json
 # saved shop pages (contain name, address, phone)
 debug/

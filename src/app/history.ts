@@ -38,7 +38,7 @@ export function orderFiles(): string[] {
 export function loadHistory(): HistoryEntry[] {
   return existsSync(HISTORY_FILE) ? JSON.parse(readFileSync(HISTORY_FILE, "utf8")) : [];
 }
-const save = (list: HistoryEntry[]) => writeFileSync(HISTORY_FILE, JSON.stringify(list, null, 2) + "\n");
+const save = (list: HistoryEntry[]) => writeFileSync(HISTORY_FILE, JSON.stringify(list, null, 2) + "\n", { mode: 0o600 });
 
 /** Order files newer than history.json (or no history yet). */
 export function historyIsStale(): boolean {

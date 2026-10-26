@@ -79,3 +79,26 @@ test("review page from raw HTML (pageText keeps the line structure parseReview n
   assert.equal(f.action, "https://mercatoronline.si/blagajna/potrdi-narocilo");
   assert.deepEqual(Object.fromEntries(setFields(f.fields, { "confirm-terms": "on" })), { note: "", "confirm-terms": "on" });
 });
+
+test("listing cache stays bounded however many different searches run", async () => {
+  const { listing, cacheSize, CACHE_MAX } = await import("../src/shop/products.ts");
+  const fake = { json: async () => ({ products: [] }) } as any;
+  for (let i = 0; i < CACHE_MAX + 150; i++) await listing(fake, { search: `q${i}` });
+  assert.ok(cacheSize() <= CACHE_MAX, `cache ${cacheSize()}`);
+});
+
+test("old data files get owner-only permissions", async () => {
+  const { mkdtempSync, writeFileSync, mkdirSync, statSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { securePrivateFiles } = await import("../src/core/files.ts");
+  const dir = mkdtempSync(join(tmpdir(), "merc-files-"));
+  writeFileSync(join(dir, "history.json"), "[]", { mode: 0o644 });
+  mkdirSync(join(dir, "orders"), { mode: 0o755 });
+  writeFileSync(join(dir, "orders", "2026-01-01-1.txt"), "x", { mode: 0o644 });
+  assert.equal(securePrivateFiles(dir), 3);
+  assert.equal(statSync(join(dir, "history.json")).mode & 0o777, 0o600);
+  assert.equal(statSync(join(dir, "orders")).mode & 0o777, 0o700);
+  assert.equal(statSync(join(dir, "orders", "2026-01-01-1.txt")).mode & 0o777, 0o600);
+  assert.equal(securePrivateFiles(dir), 0, "idempotent");
+});
