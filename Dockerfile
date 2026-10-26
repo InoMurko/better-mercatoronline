@@ -7,7 +7,7 @@
 # and fixes the Brotli RCE (CVE-2026-111497) and TLS hostname bypass (CVE-2026-106069). Don't go below it.
 # A literal tag so Dependabot can propose updates. To pin the exact image too, append its digest:
 #   docker buildx imagetools inspect node:22.23.4-slim   →   FROM node:22.23.4-slim@sha256:<digest>
-FROM node:22.23.4-slim
+FROM node:26.12.1-slim
 
 ENV NODE_ENV=production \
     TZ=Europe/Ljubljana
