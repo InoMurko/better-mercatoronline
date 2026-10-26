@@ -8,6 +8,7 @@
  *   npm run cli -- shop [--add]               the basket the agent thinks you need (--add puts it in the cart, asks first)
  *   npm run cli -- pick "toaletni papir" [--like "…"] [--qty 2] [--cheapest] [--add]
  *   npm run cli -- cheapest mleko [--category "SVEŽE MLEKO,TRAJNO MLEKO"] [--by unit|price] [--add] [--qty 1]
+ *   npm run cli -- recipe <url> [--servings 6] [--add] [--no-llm]   recipe → products (--add puts them in the cart, asks first)
  *   npm run cli -- cart [clear] [--yes]
  *   npm run cli -- checkout                   pick a slot, pay on delivery, review, confirm (asks; experimental)
  */
@@ -22,6 +23,7 @@ import { add, clearCart, readCart } from "./shop/cart.ts";
 import { confirmOrder, openDelivery, PAYMENT_METHODS, paymentMethod, prepareOrder } from "./shop/checkout.ts";
 import { importNewOrders } from "./shop/orders.ts";
 import { findCheapest } from "./shop/products.ts";
+import { recipeFromUrl, toCartItems } from "./app/recipe-match.ts";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -29,7 +31,7 @@ const { values, positionals } = parseArgs({
     max: { type: "string" }, concurrency: { type: "string" }, all: { type: "boolean", default: false },
     horizon: { type: "string" }, add: { type: "boolean", default: false }, yes: { type: "boolean", short: "y", default: false },
     like: { type: "string" }, qty: { type: "string" }, cheapest: { type: "boolean", default: false },
-    category: { type: "string" }, by: { type: "string", default: "unit" }, "no-llm": { type: "boolean", default: false },
+    category: { type: "string" }, servings: { type: "string" }, by: { type: "string", default: "unit" }, "no-llm": { type: "boolean", default: false },
   },
 });
 const [command, ...rest] = positionals;
@@ -111,6 +113,25 @@ const commands: Record<string, () => Promise<void>> = {
       const r = await add(await shop.loggedIn(), ranked[0], qty);
       console.log(r.ok ? "✓ added" : `✗ ${r.note}`);
     }
+  },
+
+  async recipe() {
+    const url = rest[0];
+    if (!url) throw new Error("usage: recipe <url> [--servings N] [--add]");
+    const habits = await loadHabits(shop.anon, { historyLookups: 0 }).catch(() => []);
+    const plan = await recipeFromUrl(shop.anon, url, { useLlm: !values["no-llm"], habits, servings: num(values.servings) ?? null, log: () => undefined });
+    console.log(`${plan.title ?? "Recipe"}${plan.servings ? ` – ${plan.servings} servings` : ""}  (${plan.source === "structured" ? "site's recipe data" : "page text"}, read by ${plan.by})`);
+    for (const s of plan.suspicious) console.log(`  ⚠ instruction-like text on the page, ignored: ${JSON.stringify(s)}`);
+    for (const l of plan.lines) {
+      const what = l.product ? `${l.qty} × ${l.product.name} – ${eur(priceLine(l.product, l.qty).final)}` : "✗ nothing found";
+      console.log(`  ${l.include ? "buy " : "home"}  ${what}${l.why ? `  (${l.why})` : ""}${l.flag ? `  ⚠ ${l.flag}` : ""}\n        ${JSON.stringify(l.original)}`);
+    }
+    const items = toCartItems(plan);
+    console.log(`  ${items.length} to buy ≈ ${eur(items.reduce((s, i) => s + priceLine(i.product, i.qty).final, 0))}  ("home" lines are left out)`);
+    if (!values.add || !items.length || !(await ask(`Put these ${items.length} in the cart?`))) return;
+    const r = await addItems(await shop.loggedIn(), items, (d, n) => process.stdout.write(`\r  ${d}/${n}`));
+    console.log(`\n✓ ${r.added}/${items.length} added`);
+    for (const p of r.problems) console.log(`  ✗ ${p}`);
   },
 
   async cart() {

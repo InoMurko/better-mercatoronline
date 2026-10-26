@@ -23,6 +23,8 @@ import { priceLine } from "./app/offers.ts";
 import { renderBasket } from "./app/basket-view.ts";
 import { confirmOrder, openDelivery, PAYMENT_METHODS, paymentMethod, prepareOrder, type DeliveryStep, type Review, type Slot } from "./shop/checkout.ts";
 import { cartLock } from "./shop/cart.ts";
+import { recipeFromUrl, rescale, toCartItems, type RecipePlan } from "./app/recipe-match.ts";
+import { renderRecipe } from "./app/recipe-view.ts";
 
 const bot = new Bot(requireEnv("TELEGRAM_BOT_TOKEN"));
 const OWNER = process.env.TELEGRAM_CHAT_ID ? Number(process.env.TELEGRAM_CHAT_ID) : null;
@@ -110,6 +112,7 @@ const COMMANDS = [
   { command: "checkout", description: "Pick a delivery slot and place the order (pay on delivery)" },
   { command: "clear", description: "Empty the Mercator cart (asks first)" },
   { command: "import", description: "Fetch new orders from your account" },
+  { command: "recipe", description: "Send a recipe link – I'll turn it into a shopping list" },
   { command: "help", description: "This list" },
 ];
 
@@ -119,6 +122,7 @@ const HELP = () =>
     ...COMMANDS.map((c) => `/${c.command} – ${esc(c.description)}`),
     "",
     "Or just send a product, e.g. <i>toaletni papir</i> – I'll find the one you usually buy.",
+    "Or send a recipe link (English or Slovenian) – I'll list the products; you untick what you have at home.",
     "Send <i>help</i> any time for this list.",
     "",
     "<b>How I know what you need</b>",
@@ -347,9 +351,41 @@ async function pickFor(ctx: Context, query: string, like?: string) {
   await send(ctx.chat!.id, `${text}\nWhich one?\n${opts}`, kb);
 }
 
+// ---------- recipes ----------
+
+/** Recipe plans waiting for your taps (the last few only). */
+const recipes = new Map<string, RecipePlan & { suspicious: string[] }>();
+const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/i;
+
+async function startRecipe(ctx: Context, url: string) {
+  const plan = await work<Awaited<ReturnType<typeof recipeFromUrl>>>(
+    ctx,
+    "Reading the recipe and finding the products",
+    async (http) => recipeFromUrl(http, url, { habits: await loadHabits(http, { historyLookups: 0 }).catch(() => []) }),
+    { loggedIn: false },
+  );
+  if (!plan) return;
+  const id = randomUUID().slice(0, 8);
+  recipes.set(id, plan);
+  while (recipes.size > 5) recipes.delete(recipes.keys().next().value!);
+  if (plan.by === "parser") {
+    await ctx.reply("(No ANTHROPIC_API_KEY – ingredients were read by a simple parser, without translation. Check the matches.)");
+  }
+  const { text, kb } = renderRecipe(plan, id);
+  await bot.api.sendMessage(ctx.chat!.id, text, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } });
+}
+
+bot.command("recipe", async (ctx) => {
+  const url = ctx.match.match(URL_IN_TEXT)?.[0];
+  if (!url) return ctx.reply("Send /recipe followed by a link, or just paste the link.");
+  return startRecipe(ctx, url);
+});
+
 bot.on("message:text", async (ctx) => {
   const q = ctx.message.text.trim();
   if (HELP_WORDS.test(q)) return ctx.reply(HELP(), { parse_mode: "HTML" });
+  const link = q.match(URL_IN_TEXT)?.[0];
+  if (link) return startRecipe(ctx, link);
   if (q.startsWith("/")) return ctx.reply(HELP(), { parse_mode: "HTML" }); // unknown command → show what exists
   await pickFor(ctx, q);
 });
@@ -362,6 +398,48 @@ bot.on("callback_query:data", async (ctx, next) => {
     await ctx.answerCallbackQuery();
     await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
     return startShopping(ctx);
+  }
+  if (data.startsWith("rc:")) {
+    const [, op, rid, a, b] = data.split(":");
+    const plan = recipes.get(rid);
+    if (!plan) {
+      await ctx.answerCallbackQuery({ text: "That recipe expired – send the link again." });
+      return ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
+    }
+    let page = Number(b ?? a) || 0;
+    let next = plan;
+    if (op === "n") return ctx.answerCallbackQuery();
+    if (op === "t") {
+      const i = Number(a);
+      const line = plan.lines[i];
+      if (!line?.product) return ctx.answerCallbackQuery();
+      next = { ...plan, lines: plan.lines.map((l, k) => (k === i ? { ...l, include: !l.include } : l)) };
+      await ctx.answerCallbackQuery({ text: `${next.lines[i].include ? "🛒 buy" : "🏠 at home"}: ${line.product.name.slice(0, 80)}` });
+    } else if (op === "p") {
+      page = Number(a) || 0;
+      await ctx.answerCallbackQuery();
+    } else if (op === "s") {
+      next = { ...rescale(plan, (plan.servings ?? 1) + Number(a)), suspicious: plan.suspicious };
+      await ctx.answerCallbackQuery({ text: `${next.servings} servings` });
+    } else if (op === "x") {
+      recipes.delete(rid);
+      await ctx.answerCallbackQuery({ text: "Recipe discarded" });
+      return ctx.editMessageText("🍳 Recipe discarded – nothing added.").catch(() => undefined);
+    } else if (op === "go") {
+      const items = toCartItems(plan);
+      await ctx.answerCallbackQuery();
+      if (!items.length) return ctx.reply("Everything is marked 🏠 at home – nothing to add.");
+      recipes.delete(rid);
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => undefined);
+      basket ??= { id: randomUUID().slice(0, 8), items: [] };
+      for (const it of items) basket = addItem(basket, it);
+      saveBasket(basket);
+      await ctx.reply(`🧺 Added ${items.length} products from the recipe to your basket. Check it, then ✅ puts it in the cart.`);
+      return showBasket(ctx.chat!.id);
+    } else return ctx.answerCallbackQuery();
+    recipes.set(rid, next);
+    const { text, kb } = renderRecipe(next, rid, page);
+    return ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: kb, link_preview_options: { is_disabled: true } }).catch(() => undefined);
   }
   if (data.startsWith("co:")) {
     const [, op, cid, idx] = data.split(":");
