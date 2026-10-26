@@ -53,7 +53,7 @@ the previous runs' ledgers and starts with whatever they left open.
 - **`safe-fetch`:** header values in error messages are reduced to printable ASCII and capped at 60 characters.
 - **Tests:** a regression test for each fix. 67 tests pass.
 
-### Hardening applied after the audit – commits `db4ae65`, `c22d8bd`, `5th commit below`
+### Hardening applied after the audit – commits `db4ae65`, `c22d8bd`, `495d59d`
 
 These were the audit's hardening notes. None of them is a confirmed vulnerability. Each change has a test (80 pass).
 Code was also changed for all 5 deferred areas, but those areas have still **not been audited**: the next run should
