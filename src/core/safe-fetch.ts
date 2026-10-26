@@ -132,9 +132,12 @@ function decompressed(res: http.IncomingMessage): Readable {
   if (enc === "gzip" || enc === "x-gzip") return res.pipe(createGunzip());
   if (enc === "deflate") return res.pipe(createInflate());
   if (enc === "br") return res.pipe(createBrotliDecompress());
-  if (enc && enc !== "identity") throw new BlockedUrlError(`unsupported content encoding ${enc}`);
+  if (enc && enc !== "identity") throw new BlockedUrlError(`unsupported content encoding ${shown(enc)}`);
   return res;
 }
+
+/** A header value from a stranger's server, safe to put in an error message (no control characters, short). */
+const shown = (v: string) => v.replace(/[^\x20-\x7e]/g, "?").slice(0, 60);
 
 function charsetOf(contentType: string): string {
   const m = contentType.match(/charset\s*=\s*"?([\w.:-]+)/i);
@@ -181,7 +184,7 @@ function oneHop(url: URL, opts: Required<Pick<SafeFetchOptions, "maxBytes">> & S
         const type = String(res.headers["content-type"] ?? "");
         if (!/^\s*(text\/html|application\/xhtml\+xml)\b/i.test(type)) {
           res.resume();
-          return reject(new BlockedUrlError(`not a web page (${type.split(";")[0] || "no content type"})`));
+          return reject(new BlockedUrlError(`not a web page (${shown(type.split(";")[0]) || "no content type"})`));
         }
         const declared = Number(res.headers["content-length"]);
         if (Number.isFinite(declared) && declared > opts.maxBytes) {

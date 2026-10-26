@@ -54,7 +54,7 @@ const SUSPICIOUS = [
   /\b(as an ai|ai assistant|language model|llm|chatgpt|claude|anthropic|openai)\b/i,
   /\b(add|put) .{0,40}\b(to|in|into) (the |my |your )?(cart|basket|košarico)\b/i,
   /\b(place|confirm|submit) (the |an |my )?order\b/i,
-  /\b(tool[_ ]?(use|call)|function call|<\/?(tool|system|assistant|untrusted)[^>]*>)/i,
+  /\b(tool[_ ]?(use|call)|function call|<\/?(tool|system|assistant|untrusted)\b)/i, // no [^>]* tail: it backtracked quadratically
   /\b(api[_ -]?keys?|access tokens?|session cookies?|credit card numbers?)\b/i,
   /(prezri|ignoriraj|pozabi) (\S+ ){0,2}(navodila|ukaze|pravila)/i,
 ];
@@ -147,8 +147,10 @@ function visibleText(document: any): Omit<RecipeSource, "suspicious"> {
   for (const el of [...document.querySelectorAll(HIDDEN)]) el.remove();
   const title = cleanLine(document.querySelector("h1")?.textContent ?? document.querySelector("title")?.textContent ?? "", 120) || null;
   // an element that looks like the ingredient list, else the article / main content, else the body
-  const candidates = [...document.querySelectorAll("[class*=ingredient i],[id*=ingredient i],[class*=sestavin i],[id*=sestavin i]")];
-  const best = candidates.sort((a: any, b: any) => (b.textContent?.length ?? 0) - (a.textContent?.length ?? 0))[0];
+  // nested candidates make textContent quadratic: look at the first few only, and measure each once
+  const candidates = [...document.querySelectorAll("[class*=ingredient i],[id*=ingredient i],[class*=sestavin i],[id*=sestavin i]")].slice(0, 20);
+  const sized = candidates.map((el: any) => ({ el, len: String(el.textContent ?? "").length }));
+  const best = sized.sort((a, b) => b.len - a.len)[0]?.el;
   const root = best ?? document.querySelector("article") ?? document.querySelector("main") ?? (document.documentElement ? document.body : null);
   for (const br of [...(root?.querySelectorAll?.("br") ?? [])]) br.replaceWith("\n");
   for (const el of [...(root?.querySelectorAll?.("p,li,div,tr,h1,h2,h3,h4,dt,dd") ?? [])]) el.append("\n");
@@ -171,11 +173,73 @@ const HIDING_PLACES =
   '[style*="visibility:hidden"],[style*="visibility: hidden"],[style*="font-size:0"],[style*="font-size: 0"],[style*="opacity:0"],' +
   '[style*="opacity: 0"],.sr-only,.visually-hidden,.screen-reader-text';
 
+/**
+ * Text of matched elements up to `max` characters. Stops early: with nested matches, each element's textContent
+ * repeats its descendants', so collecting all of them first grows with the square of the nesting depth.
+ */
+function collectText(els: Iterable<any>, max: number): string {
+  let out = "";
+  let n = 0;
+  for (const el of els) {
+    if (out.length >= max || ++n > 2000) break;
+    out += `${String(el.textContent ?? "").slice(0, max - out.length)}\n`;
+  }
+  return out;
+}
+
+export const MAX_NESTING = 5000;
+const VOID = new Set("area base br col embed hr img input link meta param source track wbr".split(" "));
+/** Elements the parser closes by itself when the next one starts – they never nest deeply. */
+const SELF_CLOSING = new Set("p li dt dd tr td th option optgroup thead tbody tfoot rb rt rp".split(" "));
+const RAW_TEXT = new Set(["script", "style", "textarea", "title", "noscript", "template", "xmp", "iframe"]);
+
+/**
+ * Upper estimate of how deeply elements nest, in one linear pass (indexOf only – no regex that could backtrack).
+ * linkedom's parser slows down sharply with depth (80k nested <div>s ≈ 4 s), and a page author controls depth.
+ */
+export function nestingDepth(html: string): number {
+  const lower = html.toLowerCase(); // once – lowercasing per tag would be quadratic
+  let depth = 0;
+  let max = 0;
+  let i = 0;
+  while ((i = html.indexOf("<", i)) >= 0) {
+    if (html.startsWith("<!--", i)) {
+      const end = html.indexOf("-->", i + 4);
+      if (end < 0) break;
+      i = end + 3;
+      continue;
+    }
+    const close = html[i + 1] === "/";
+    let j = i + (close ? 2 : 1);
+    let name = "";
+    while (j < html.length && name.length < 20 && /[A-Za-z0-9-]/.test(html[j])) name += html[j++];
+    name = name.toLowerCase();
+    const gt = html.indexOf(">", j);
+    if (!name || gt < 0) {
+      i += 1;
+      continue;
+    }
+    if (close) {
+      if (!VOID.has(name) && !SELF_CLOSING.has(name)) depth = Math.max(0, depth - 1);
+    } else if (RAW_TEXT.has(name)) {
+      const end = lower.indexOf(`</${name}`, gt);
+      i = end < 0 ? html.length : end;
+      continue;
+    } else if (!VOID.has(name) && !SELF_CLOSING.has(name) && html[gt - 1] !== "/") {
+      max = Math.max(max, ++depth);
+    }
+    i = gt + 1;
+  }
+  return max;
+}
+
 /** Read a recipe out of a page's HTML. The page is parsed, never executed. */
 export function extractRecipe(html: string): RecipeSource {
+  const depth = nestingDepth(html);
+  if (depth > MAX_NESTING) throw new Error(`that page's HTML is nested ${depth} levels deep – not a normal web page, not reading it`);
   // a page without <html>…</html> still parses as a document
   const { document } = parseHTML(/<html[\s>]/i.test(html.slice(0, 5000)) ? html : `<!doctype html><html><body>${html}</body></html>`);
-  const hidden = [...document.querySelectorAll(HIDING_PLACES)].map((el: any) => String(el.textContent ?? "")).join("\n").slice(0, 200_000);
+  const hidden = collectText(document.querySelectorAll(HIDING_PLACES), 200_000);
   const found = structured(document) ?? visibleText(document);
   // warn about AI-directed text in what we'll use, and in places a reader never sees
   return { ...found, suspicious: findSuspicious(found.lines.join("\n"), hidden) };

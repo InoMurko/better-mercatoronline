@@ -97,11 +97,15 @@ test("too big (declared, streamed, or a gzip bomb), not HTML, or too slow → re
       res.end("x".repeat(3_000_000));
     } else if (req.url === "/bomb") res.writeHead(200, { "Content-Type": "text/html", "Content-Encoding": "gzip" }).end(gzipSync(Buffer.alloc(50_000_000)));
     else if (req.url === "/json") res.writeHead(200, { "Content-Type": "application/json" }).end("{}");
-    else if (req.url === "/exe") res.writeHead(200, { "Content-Type": "application/octet-stream" }).end("MZ");
+    else if (req.url === "/ctl") {
+      res.socket!.write("HTTP/1.1 200 OK\r\nContent-Type: x\x9b2J\x9d0;pwned\x07\r\nContent-Length: 0\r\n\r\n");
+      res.socket!.end();
+    } else if (req.url === "/exe") res.writeHead(200, { "Content-Type": "application/octet-stream" }).end("MZ");
     else if (req.url === "/slow") setTimeout(() => res.writeHead(200, { "Content-Type": "text/html" }).end("late"), 2000);
   });
   try {
     for (const path of ["/declared", "/stream", "/bomb", "/json", "/exe"]) await assert.rejects(safeFetchHtml(`${s.base}${path}`, s.opts), BlockedUrlError, path);
+    await assert.rejects(safeFetchHtml(`${s.base}/ctl`, s.opts), (e: Error) => /^not a web page \([\x20-\x7e]*\)$/.test(e.message) || /HPE_|Invalid/.test(e.message));
     await assert.rejects(safeFetchHtml(`${s.base}/slow`, { ...s.opts, timeoutMs: 300 }), /longer than/);
   } finally {
     s.close();

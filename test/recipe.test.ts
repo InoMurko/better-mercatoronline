@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanLine, extractRecipe, parseServings } from "../src/app/recipe.ts";
+import { cleanLine, extractRecipe, findSuspicious, nestingDepth, parseServings } from "../src/app/recipe.ts";
 import { ingredientSchema } from "../src/app/recipe-ai.ts";
 import type { Ai } from "../src/app/ai.ts";
 import { packsFor, rankForIngredient, rescale, toCartItems, type RecipePlan } from "../src/app/recipe-match.ts";
@@ -81,6 +81,30 @@ test("hostile sizes stay fast; a page without <html> still works", () => {
   assert.ok(Date.now() - t < 1500, `took ${Date.now() - t} ms`);
   assert.deepEqual(extractRecipe('<script type="application/ld+json">{"@type":"Recipe","recipeIngredient":["1 egg"]}</script>').lines, ["1 egg"]);
   assert.equal(extractRecipe("just text").kind, "page");
+});
+
+test("deeply nested hidden or ingredient elements and many '<tool' stay fast", () => {
+  for (const html of ["<div hidden>a", "<div class=ingredient>a", "<span style='display:none'>x"]) {
+    const t = Date.now();
+    extractRecipe(`<html><body>${html.repeat(4_900)}</body></html>`); // just under MAX_NESTING
+    assert.ok(Date.now() - t < 1000, `${html}: ${Date.now() - t} ms`);
+  }
+  const t = Date.now();
+  findSuspicious("", "a<tool".repeat(33_000));
+  assert.ok(Date.now() - t < 200, `findSuspicious: ${Date.now() - t} ms`);
+  assert.equal(findSuspicious("", "x <tool_call> y").length, 1, "still flags the tag");
+});
+
+test("absurdly deep pages are refused before parsing; normal and script-heavy pages are not", () => {
+  const t = Date.now();
+  assert.throws(() => extractRecipe(`<html><body>${"<div hidden>a".repeat(150_000)}</body></html>`), /nested 1500\d\d levels/);
+  assert.throws(() => extractRecipe(`<html><body>${"<span>".repeat(10_000)}</body></html>`), /nested/);
+  assert.ok(Date.now() - t < 1000, `${Date.now() - t} ms`);
+  assert.equal(nestingDepth("<p>a<p>b<li>c<br><img src=x><div><div></div></div>"), 2);
+  assert.equal(nestingDepth(`<script>${"<div>".repeat(9000)}</script><div></div>`), 1);
+  const t2 = Date.now();
+  nestingDepth("<script></script>".repeat(100_000));
+  assert.ok(Date.now() - t2 < 500, "many scripts stay linear");
 });
 
 test("parseServings and cleanLine edge cases", () => {
